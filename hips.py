@@ -48,6 +48,18 @@ def construir_parser():
         help="Ruta del binario sendmail"
     )
 
+    parser.add_argument(
+        "--prevenir",
+        action="store_true",
+        help="Ejecuta acciones automáticas de prevención cuando se detectan alertas"
+    )
+
+    parser.add_argument(
+        "--prevenir-dry-run",
+        action="store_true",
+        help="Simula las acciones de prevención sin ejecutarlas realmente"
+    )
+
     return parser
 
 
@@ -73,6 +85,26 @@ def ejecutar_hips(args=None):
         admin_email=opciones.admin_email,
         sendmail_path=opciones.sendmail_path
     )
+
+    if opciones.prevenir:
+        from prevention.engine import prevenir_alertas, marcar_alarmas_prevenidas_resueltas
+
+        resultado["prevencion"] = prevenir_alertas(
+            alertas_por_modulo,
+            dry_run=opciones.prevenir_dry_run
+        )
+
+        if opciones.guardar_db and not opciones.prevenir_dry_run:
+            resultado["resolucion_automatica"] = marcar_alarmas_prevenidas_resueltas(
+                conexion,
+                resultado.get("persistencia"),
+                resultado.get("prevencion")
+            )
+        else:
+            resultado["resolucion_automatica"] = None
+    else:
+        resultado["prevencion"] = None
+        resultado["resolucion_automatica"] = None
 
     if conexion is not None:
         conexion.close()

@@ -1,15 +1,11 @@
 [Unit]
-Description=HIPS - Ejecución de detección y prevención
+Description=HIPS - deteccion y prevencion automatica
 After=network.target postgresql.service
-Wants=postgresql.service
 
 [Service]
 Type=oneshot
-EnvironmentFile=/etc/hips/hips.env
 WorkingDirectory=/opt/hips-so2
-ExecStart=/opt/hips-so2/scripts/run_hips_once.sh
+EnvironmentFile=/etc/hips/hips.env
+ExecStart=/usr/bin/python3 /opt/hips-so2/hips.py --guardar-db --enviar-email --prevenir --json
 User=root
 Group=root
-
-[Install]
-WantedBy=multi-user.target

@@ -1,9 +1,9 @@
 [Unit]
-Description=Ejecutar HIPS periódicamente
+Description=Ejecutar HIPS automaticamente cada 1 minuto
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=1min
+OnBootSec=30s
+OnUnitActiveSec=60s
 Unit=hips.service
 
 [Install]
