@@ -15,31 +15,44 @@ class TestSniffers(unittest.TestCase):
         os.environ.pop("HIPS_LOG_DIR", None)
 
     def test_detecta_tcpdump(self):
-        procesos = "root 1234 0.0 tcpdump -i enp0s3"
-        alertas = detectar_sniffers_en_texto(procesos)
+        salida = "1234 root 0.0 0.1 tcpdump /usr/sbin/tcpdump -i lo"
+        alertas = detectar_sniffers_en_texto(salida)
 
         self.assertEqual(len(alertas), 1)
+        self.assertEqual(alertas[0]["tipo"], "sniffer_detectado")
         self.assertEqual(alertas[0]["herramienta"], "tcpdump")
 
     def test_detecta_tshark(self):
-        procesos = "user 2222 0.0 tshark -i eth0"
-        alertas = detectar_sniffers_en_texto(procesos)
+        salida = "2222 root 0.0 0.1 tshark /usr/bin/tshark -i enp0s3"
+        alertas = detectar_sniffers_en_texto(salida)
 
         self.assertEqual(len(alertas), 1)
         self.assertEqual(alertas[0]["herramienta"], "tshark")
 
     def test_no_detecta_proceso_normal(self):
-        procesos = "root 1000 0.0 /usr/sbin/sshd\npostgres 2000 postmaster"
-        alertas = detectar_sniffers_en_texto(procesos)
+        salida = "3333 ile 0.0 0.1 firefox /usr/lib64/firefox/firefox"
+        alertas = detectar_sniffers_en_texto(salida)
+
+        self.assertEqual(len(alertas), 0)
+
+    def test_no_detecta_wrapper_sudo_con_tcpdump_en_argumentos(self):
+        salida = "4444 root 0.0 0.1 sudo sudo timeout 60 /usr/sbin/tcpdump -i lo"
+        alertas = detectar_sniffers_en_texto(salida)
+
+        self.assertEqual(len(alertas), 0)
+
+    def test_no_detecta_wrapper_timeout_con_tcpdump_en_argumentos(self):
+        salida = "5555 root 0.0 0.1 timeout timeout 60 /usr/sbin/tcpdump -i lo"
+        alertas = detectar_sniffers_en_texto(salida)
 
         self.assertEqual(len(alertas), 0)
 
     def test_analizar_registra_alerta(self):
-        procesos = "root 3333 0.0 wireshark"
-        alertas = analizar_procesos_sniffers(procesos)
+        salida = "6666 root 0.0 0.1 tcpdump /usr/sbin/tcpdump -i lo"
+        alertas = analizar_procesos_sniffers(salida)
 
         self.assertEqual(len(alertas), 1)
-        self.assertEqual(alertas[0]["tipo"], "sniffer_detectado")
+        self.assertEqual(alertas[0]["herramienta"], "tcpdump")
 
 
 if __name__ == "__main__":
