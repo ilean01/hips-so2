@@ -35,14 +35,27 @@ class TestProcessMonitor(unittest.TestCase):
         self.assertEqual(len(alertas), 1)
         self.assertEqual(alertas[0]["tipo"], "memoria_alta")
 
+    def test_detecta_nmap(self):
+        salida = "5555 root 0.0 0.1 nmap nmap -sS 127.0.0.1"
+        alertas = detectar_procesos_sospechosos(salida)
+
+        self.assertEqual(len(alertas), 1)
+        self.assertEqual(alertas[0]["tipo"], "proceso_sospechoso")
+
     def test_no_detecta_proceso_normal(self):
         salida = "4444 postgres 0.1 0.5 postgres postmaster"
         alertas = detectar_procesos_sospechosos(salida)
 
         self.assertEqual(len(alertas), 0)
 
+    def test_no_detecta_nc_dentro_de_palabra_normal(self):
+        salida = "6666 root 0.0 0.1 sync sync"
+        alertas = detectar_procesos_sospechosos(salida)
+
+        self.assertEqual(len(alertas), 0)
+
     def test_analizar_procesos_registra_alerta(self):
-        salida = "5555 root 0.0 0.1 nmap nmap -sS 127.0.0.1"
+        salida = "7777 root 0.0 0.1 nmap nmap -sS 127.0.0.1"
         alertas = analizar_procesos(salida)
 
         self.assertEqual(len(alertas), 1)
