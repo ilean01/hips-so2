@@ -10,7 +10,7 @@ from detection.process_monitor import analizar_procesos
 from detection.sniffers import analizar_procesos_sniffers
 from detection.system_logs import analizar_logs_sistema
 from detection.tmp_monitor import escanear_tmp
-from detection.user_monitor import crear_baseline_usuarios, analizar_usuarios
+from detection.user_monitor import crear_baseline_usuarios, analizar_usuarios, analizar_usuarios_conectados
 
 
 def ejecutar_comando(comando):
@@ -147,6 +147,23 @@ def ejecutar_ciclo_deteccion(entradas=None, registrar_alertas_logs=True):
             registrar_alertas=registrar_alertas_logs
         )
         agregar_alertas(alertas_por_modulo, "user_monitor", alertas)
+
+    who_texto = entradas.get("who_texto")
+    if who_texto is None:
+        who_texto = ejecutar_comando(["who"])
+
+    origenes_permitidos = entradas.get("origenes_login_permitidos")
+    if origenes_permitidos is None:
+        origenes_permitidos = {"local", "127.0.0.1", "::1"}
+
+    alertas = analizar_usuarios_conectados(
+        who_texto,
+        origenes_permitidos=origenes_permitidos,
+        hora_inicio=entradas.get("login_hora_inicio", 6),
+        hora_fin=entradas.get("login_hora_fin", 23),
+        registrar_alertas=registrar_alertas_logs
+    )
+    agregar_alertas(alertas_por_modulo, "user_monitor", alertas)
 
     system_logs_texto = entradas.get("system_logs_texto")
     if system_logs_texto is None:

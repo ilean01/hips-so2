@@ -113,6 +113,119 @@ def detectar_cambios_usuarios(baseline: dict, contenido_actual_passwd: str) -> l
     return alertas
 
 
+def parsear_who(salida_who: str) -> list[dict]:
+    sesiones = []
+
+    for linea in salida_who.splitlines():
+        linea = linea.strip()
+
+        if not linea:
+            continue
+
+        partes = linea.split()
+
+        if len(partes) < 4:
+            continue
+
+        usuario = partes[0]
+        terminal = partes[1]
+        fecha = partes[2]
+        hora = partes[3]
+
+        origen = "local"
+        if len(partes) >= 5:
+            origen = " ".join(partes[4:]).strip()
+            origen = origen.strip("()") or "local"
+
+        sesiones.append({
+            "usuario": usuario,
+            "terminal": terminal,
+            "fecha": fecha,
+            "hora": hora,
+            "origen": origen,
+            "linea": linea,
+        })
+
+    return sesiones
+
+
+def _hora_a_entero(hora: str):
+    try:
+        return int(hora.split(":")[0])
+    except (ValueError, IndexError):
+        return None
+
+
+def detectar_usuarios_conectados(
+    salida_who: str,
+    origenes_permitidos=None,
+    hora_inicio: int = 6,
+    hora_fin: int = 23
+) -> list[dict]:
+    sesiones = parsear_who(salida_who)
+    alertas = []
+
+    if origenes_permitidos is None:
+        origenes_permitidos = {"local", "127.0.0.1", "::1"}
+
+    origenes_permitidos = set(origenes_permitidos)
+
+    for sesion in sesiones:
+        origen = sesion["origen"]
+        hora = _hora_a_entero(sesion["hora"])
+
+        if origen not in origenes_permitidos:
+            alertas.append({
+                "tipo": "origen_login_inusual",
+                "usuario": sesion["usuario"],
+                "origen": origen,
+                "detalle": f"Usuario conectado desde origen no permitido: {origen}",
+                "sesion": sesion["linea"],
+            })
+
+        if hora is not None and not (hora_inicio <= hora <= hora_fin):
+            alertas.append({
+                "tipo": "login_fuera_horario",
+                "usuario": sesion["usuario"],
+                "origen": origen,
+                "detalle": f"Usuario conectado fuera del horario esperado: {sesion['hora']}",
+                "sesion": sesion["linea"],
+            })
+
+    return alertas
+
+
+def analizar_usuarios_conectados(
+    salida_who: str,
+    origenes_permitidos=None,
+    hora_inicio: int = 6,
+    hora_fin: int = 23,
+    registrar_alertas: bool = True
+) -> list[dict]:
+    alertas = detectar_usuarios_conectados(
+        salida_who=salida_who,
+        origenes_permitidos=origenes_permitidos,
+        hora_inicio=hora_inicio,
+        hora_fin=hora_fin
+    )
+
+    if registrar_alertas:
+        for alerta in alertas:
+            log_alarma(
+                modulo="user_monitor",
+                severidad="alta",
+                evento=alerta["tipo"],
+                detalle=alerta["detalle"],
+                extra={
+                    "usuario": alerta["usuario"],
+                    "origen": alerta["origen"],
+                    "sesion": alerta["sesion"],
+                }
+            )
+
+    return alertas
+
+
 def analizar_usuarios(baseline: dict, contenido_actual_passwd: str, registrar_alertas: bool = True) -> list[dict]:
     alertas = detectar_cambios_usuarios(baseline, contenido_actual_passwd)
 
