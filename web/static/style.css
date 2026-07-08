@@ -168,3 +168,12 @@ th {
   font-size: 12px;
   font-weight: bold;
 }
+
+.inline-form {
+  margin: 0;
+}
+
+.input-small {
+  width: 110px;
+  padding: 6px;
+}

@@ -100,7 +100,44 @@ def marcar_alarma_resuelta(alarma_id: int) -> None:
     conn.close()
 
 
-def crear_app(dashboard_provider=None, resolver_provider=None):
+def actualizar_configuracion_modulo(
+    modulo: str,
+    habilitado: bool,
+    intervalo_segundos: int,
+    umbral
+) -> None:
+    conn = obtener_conexion()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        UPDATE configuracion_modulos
+        SET habilitado = %s,
+            intervalo_segundos = %s,
+            umbral = %s
+        WHERE modulo = %s;
+        """,
+        (habilitado, intervalo_segundos, umbral, modulo)
+    )
+
+    cur.execute(
+        """
+        INSERT INTO eventos_sistema (modulo, evento, detalle)
+        VALUES (%s, %s, %s);
+        """,
+        (
+            "web",
+            "modulo_actualizado",
+            f"Módulo {modulo} actualizado desde el dashboard"
+        )
+    )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def crear_app(dashboard_provider=None, resolver_provider=None, modulo_provider=None):
     app = Flask(__name__)
     app.secret_key = os.environ.get("HIPS_WEB_SECRET_KEY", "cambiar-esta-clave-en-produccion")
 
@@ -108,6 +145,7 @@ def crear_app(dashboard_provider=None, resolver_provider=None):
     app.config["HIPS_WEB_PASSWORD"] = os.environ.get("HIPS_WEB_PASSWORD", "admin")
     app.config["DASHBOARD_PROVIDER"] = dashboard_provider or consultar_dashboard
     app.config["RESOLVER_PROVIDER"] = resolver_provider or marcar_alarma_resuelta
+    app.config["MODULO_PROVIDER"] = modulo_provider or actualizar_configuracion_modulo
 
     def login_requerido(func):
         @wraps(func)
@@ -153,6 +191,24 @@ def crear_app(dashboard_provider=None, resolver_provider=None):
     @login_requerido
     def resolver_alarma(alarma_id):
         app.config["RESOLVER_PROVIDER"](alarma_id)
+        return redirect(url_for("dashboard"))
+
+    @app.route("/modulos/<modulo>/actualizar", methods=["POST"])
+    @login_requerido
+    def actualizar_modulo(modulo):
+        habilitado = request.form.get("habilitado") == "on"
+        intervalo_segundos = int(request.form.get("intervalo_segundos", "60"))
+
+        umbral_texto = request.form.get("umbral", "").strip()
+        umbral = int(umbral_texto) if umbral_texto else None
+
+        app.config["MODULO_PROVIDER"](
+            modulo,
+            habilitado,
+            intervalo_segundos,
+            umbral
+        )
+
         return redirect(url_for("dashboard"))
 
     @app.route("/logout", methods=["POST"])

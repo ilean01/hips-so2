@@ -155,15 +155,27 @@
             <th>Habilitado</th>
             <th>Intervalo</th>
             <th>Umbral</th>
+            <th>Acción</th>
           </tr>
         </thead>
         <tbody>
           {% for modulo in datos.modulos %}
           <tr>
             <td>{{ modulo.modulo }}</td>
-            <td>{{ modulo.habilitado }}</td>
-            <td>{{ modulo.intervalo_segundos }}</td>
-            <td>{{ modulo.umbral or "N/A" }}</td>
+            <td>
+              <form method="post" action="{{ url_for('actualizar_modulo', modulo=modulo.modulo) }}" class="inline-form">
+                <input type="checkbox" name="habilitado" {% if modulo.habilitado %}checked{% endif %}>
+            </td>
+            <td>
+                <input type="number" name="intervalo_segundos" min="1" value="{{ modulo.intervalo_segundos }}" class="input-small">
+            </td>
+            <td>
+                <input type="number" name="umbral" min="0" value="{{ modulo.umbral or '' }}" class="input-small" placeholder="N/A">
+            </td>
+            <td>
+                <button type="submit" class="btn-small">Guardar</button>
+              </form>
+            </td>
           </tr>
           {% endfor %}
         </tbody>

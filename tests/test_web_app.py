@@ -50,9 +50,17 @@ class TestWebApp(unittest.TestCase):
         def resolver_fake(alarma_id):
             self.resueltas.append(alarma_id)
 
+        self.modulos_actualizados = []
+
+        def modulo_fake(modulo, habilitado, intervalo_segundos, umbral):
+            self.modulos_actualizados.append(
+                (modulo, habilitado, intervalo_segundos, umbral)
+            )
+
         self.app = crear_app(
             dashboard_provider=datos_fake,
-            resolver_provider=resolver_fake
+            resolver_provider=resolver_fake,
+            modulo_provider=modulo_fake
         )
         self.app.config["TESTING"] = True
         self.app.config["HIPS_WEB_USER"] = "admin"
@@ -80,6 +88,30 @@ class TestWebApp(unittest.TestCase):
         self.assertIn(b"Dashboard HIPS", response.data)
         self.assertIn(b"sudo_fallido", response.data)
 
+
+
+    def test_actualizar_modulo(self):
+        self.client.post(
+            "/login",
+            data={"usuario": "admin", "password": "secreto"},
+            follow_redirects=True
+        )
+
+        response = self.client.post(
+            "/modulos/system_logs/actualizar",
+            data={
+                "habilitado": "on",
+                "intervalo_segundos": "30",
+                "umbral": "7",
+            },
+            follow_redirects=True
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self.modulos_actualizados,
+            [("system_logs", True, 30, 7)]
+        )
 
     def test_marcar_alarma_resuelta(self):
         self.client.post(
