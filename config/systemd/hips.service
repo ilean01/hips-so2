@@ -1,0 +1,15 @@
+[Unit]
+Description=HIPS - Ejecución de detección y prevención
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/hips/hips.env
+WorkingDirectory=/opt/hips-so2
+ExecStart=/opt/hips-so2/scripts/run_hips_once.sh
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

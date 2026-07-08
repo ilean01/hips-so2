@@ -1,0 +1,10 @@
+[Unit]
+Description=Ejecutar HIPS periódicamente
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Unit=hips.service
+
+[Install]
+WantedBy=timers.target
