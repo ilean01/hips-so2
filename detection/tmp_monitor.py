@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import re
 import stat
 
 from core.hips_logger import log_alarma
@@ -35,11 +36,26 @@ def _es_ejecutable(ruta: Path) -> bool:
     return os.access(str(ruta), os.X_OK)
 
 
+def _es_lock_legitimo_tmp(path: Path) -> bool:
+    nombre = path.name
+
+    if re.match(r"^\.X\d+-lock$", nombre):
+        return True
+
+    if re.match(r"^\.s\.PGSQL\.\d+\.lock$", nombre):
+        return True
+
+    return False
+
+
 def analizar_archivo_tmp(ruta_archivo: str) -> list[dict]:
     path = Path(ruta_archivo)
     alertas = []
 
     if not path.exists() or not path.is_file():
+        return alertas
+
+    if _es_lock_legitimo_tmp(path):
         return alertas
 
     nombre = path.name.lower()

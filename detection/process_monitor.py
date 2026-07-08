@@ -17,6 +17,13 @@ PROCESOS_SOSPECHOSOS = [
     "sqlmap",
 ]
 
+PROCESOS_PERMITIDOS = [
+    "tracker-miner-f",
+    "tracker-miner-fs",
+    "tracker-extract",
+    "tracker-store",
+]
+
 
 def _convertir_float(valor: str) -> float:
     try:
@@ -56,6 +63,19 @@ def _tokens(texto: str) -> list:
     return re.findall(r"[a-zA-Z0-9_.+-]+", texto.lower())
 
 
+def _es_proceso_permitido(proceso: dict) -> bool:
+    comando_base = Path(proceso["comando"]).name.lower()
+    texto = f"{proceso['comando']} {proceso['argumentos']}".lower()
+
+    for permitido in PROCESOS_PERMITIDOS:
+        if permitido == comando_base:
+            return True
+        if permitido in texto:
+            return True
+
+    return False
+
+
 def _coincide_proceso_sospechoso(proceso: dict, nombre_sospechoso: str) -> bool:
     comando_base = Path(proceso["comando"]).name.lower()
     texto = f"{proceso['comando']} {proceso['argumentos']}".lower()
@@ -91,17 +111,18 @@ def detectar_procesos_sospechosos(
         if proceso is None:
             continue
 
-        for nombre in PROCESOS_SOSPECHOSOS:
-            if _coincide_proceso_sospechoso(proceso, nombre):
-                alertas.append({
-                    "tipo": "proceso_sospechoso",
-                    "pid": proceso["pid"],
-                    "usuario": proceso["usuario"],
-                    "comando": proceso["comando"],
-                    "detalle": f"Proceso sospechoso detectado: {nombre}",
-                    "proceso": proceso["linea"],
-                })
-                break
+        if not _es_proceso_permitido(proceso):
+            for nombre in PROCESOS_SOSPECHOSOS:
+                if _coincide_proceso_sospechoso(proceso, nombre):
+                    alertas.append({
+                        "tipo": "proceso_sospechoso",
+                        "pid": proceso["pid"],
+                        "usuario": proceso["usuario"],
+                        "comando": proceso["comando"],
+                        "detalle": f"Proceso sospechoso detectado: {nombre}",
+                        "proceso": proceso["linea"],
+                    })
+                    break
 
         if proceso["cpu"] >= cpu_umbral:
             alertas.append({

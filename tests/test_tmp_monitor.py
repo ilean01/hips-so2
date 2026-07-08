@@ -66,6 +66,23 @@ class TestTmpMonitor(unittest.TestCase):
 
         self.assertIn("nombre_sospechoso_tmp", tipos)
 
+
+    def test_ignora_lock_x11_legitimo(self):
+        archivo = self.tmp_simulado / ".X0-lock"
+        archivo.write_text("lock normal", encoding="utf-8")
+
+        alertas = analizar_archivo_tmp(str(archivo))
+
+        self.assertEqual(len(alertas), 0)
+
+    def test_ignora_lock_postgresql_legitimo(self):
+        archivo = self.tmp_simulado / ".s.PGSQL.5432.lock"
+        archivo.write_text("lock normal postgres", encoding="utf-8")
+
+        alertas = analizar_archivo_tmp(str(archivo))
+
+        self.assertEqual(len(alertas), 0)
+
     def test_escanear_tmp_registra_alertas(self):
         archivo = self.tmp_simulado / "backdoor.sh"
         archivo.write_text("#!/bin/bash\necho backdoor", encoding="utf-8")

@@ -54,6 +54,13 @@ class TestProcessMonitor(unittest.TestCase):
 
         self.assertEqual(len(alertas), 0)
 
+
+    def test_no_detecta_tracker_miner_legitimo(self):
+        salida = "21758 ile 0.0 0.5 tracker-miner-f /usr/libexec/tracker-miner-fs-3"
+        alertas = detectar_procesos_sospechosos(salida)
+
+        self.assertEqual(len(alertas), 0)
+
     def test_analizar_procesos_registra_alerta(self):
         salida = "7777 root 0.0 0.1 nmap nmap -sS 127.0.0.1"
         alertas = analizar_procesos(salida)
