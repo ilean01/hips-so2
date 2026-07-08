@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sys
 
 from core.runner import ejecutar_ciclo_deteccion
@@ -29,6 +30,24 @@ def construir_parser():
         help="No escribe alertas en archivos de log durante esta ejecución"
     )
 
+    parser.add_argument(
+        "--enviar-email",
+        action="store_true",
+        help="Envía un correo al administrador si se detectan alertas"
+    )
+
+    parser.add_argument(
+        "--admin-email",
+        default=os.environ.get("HIPS_ADMIN_EMAIL", ""),
+        help="Correo del administrador. También puede configurarse con HIPS_ADMIN_EMAIL"
+    )
+
+    parser.add_argument(
+        "--sendmail-path",
+        default=os.environ.get("HIPS_SENDMAIL_PATH", "/usr/sbin/sendmail"),
+        help="Ruta del binario sendmail"
+    )
+
     return parser
 
 
@@ -49,7 +68,10 @@ def ejecutar_hips(args=None):
     resultado = procesar_alertas(
         alertas_por_modulo,
         conexion=conexion,
-        guardar_en_db=opciones.guardar_db
+        guardar_en_db=opciones.guardar_db,
+        enviar_email=opciones.enviar_email,
+        admin_email=opciones.admin_email,
+        sendmail_path=opciones.sendmail_path
     )
 
     if conexion is not None:
@@ -64,6 +86,10 @@ def ejecutar_hips(args=None):
 
         for modulo, datos in resumen["modulos"].items():
             print(f"- {modulo}: {datos['cantidad']} alerta(s)")
+
+        if resultado.get("email") is not None:
+            estado = "enviado" if resultado["email"].get("enviado") else "no enviado"
+            print(f"Email administrador: {estado}")
 
     return resultado
 

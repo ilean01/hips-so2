@@ -1,4 +1,5 @@
 from core.alert_service import registrar_alertas_db
+from core.email_notifier import enviar_email_admin
 
 
 def contar_alertas(alertas_por_modulo: dict) -> int:
@@ -45,12 +46,20 @@ def persistir_alertas(conexion, alertas_por_modulo: dict) -> dict:
     return resultado
 
 
-def procesar_alertas(alertas_por_modulo: dict, conexion=None, guardar_en_db: bool = False) -> dict:
+def procesar_alertas(
+    alertas_por_modulo: dict,
+    conexion=None,
+    guardar_en_db: bool = False,
+    enviar_email: bool = False,
+    admin_email: str = "",
+    sendmail_path: str = "/usr/sbin/sendmail"
+) -> dict:
     resumen = generar_resumen(alertas_por_modulo)
 
     resultado = {
         "resumen": resumen,
-        "persistencia": None
+        "persistencia": None,
+        "email": None
     }
 
     if guardar_en_db:
@@ -58,5 +67,12 @@ def procesar_alertas(alertas_por_modulo: dict, conexion=None, guardar_en_db: boo
             raise ValueError("Se requiere una conexión para guardar alertas en PostgreSQL")
 
         resultado["persistencia"] = persistir_alertas(conexion, alertas_por_modulo)
+
+    if enviar_email:
+        resultado["email"] = enviar_email_admin(
+            alertas_por_modulo,
+            admin_email=admin_email,
+            sendmail_path=sendmail_path
+        )
 
     return resultado
