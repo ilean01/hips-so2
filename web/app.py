@@ -74,22 +74,26 @@ def marcar_alarma_resuelta(alarma_id: int) -> None:
         """
         UPDATE alarmas
         SET resuelta = true
-        WHERE id = %s;
+        WHERE id = %s AND resuelta = false
+        RETURNING id;
         """,
         (alarma_id,)
     )
 
-    cur.execute(
-        """
-        INSERT INTO eventos_sistema (modulo, evento, detalle)
-        VALUES (%s, %s, %s);
-        """,
-        (
-            "web",
-            "alarma_resuelta",
-            f"Alarma {alarma_id} marcada como resuelta desde el dashboard"
+    alarma_actualizada = cur.fetchone()
+
+    if alarma_actualizada:
+        cur.execute(
+            """
+            INSERT INTO eventos_sistema (modulo, evento, detalle)
+            VALUES (%s, %s, %s);
+            """,
+            (
+                "web",
+                "alarma_resuelta",
+                f"Alarma {alarma_id} marcada como resuelta desde el dashboard"
+            )
         )
-    )
 
     conn.commit()
     cur.close()
