@@ -1,0 +1,154 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+  color: #1f2933;
+}
+
+.login-body {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.login-card {
+  width: 360px;
+  background: white;
+  padding: 32px;
+  border-radius: 16px;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.12);
+}
+
+.login-card h1 {
+  margin: 0 0 8px;
+}
+
+.login-card p {
+  margin-bottom: 24px;
+  color: #52616b;
+}
+
+label {
+  display: block;
+  margin: 14px 0 6px;
+  font-weight: bold;
+}
+
+input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccd6dd;
+  border-radius: 8px;
+}
+
+button {
+  margin-top: 18px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #1f2933;
+  color: white;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.alert-error {
+  padding: 10px;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #991b1b;
+  margin-bottom: 12px;
+}
+
+.topbar {
+  background: #111827;
+  color: white;
+  padding: 22px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.topbar h1 {
+  margin: 0;
+}
+
+.topbar p {
+  margin: 6px 0 0;
+  color: #cbd5e1;
+}
+
+.topbar form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.container {
+  padding: 28px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.card,
+.panel {
+  background: white;
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
+}
+
+.card h2 {
+  font-size: 36px;
+  margin: 0;
+}
+
+.card p {
+  margin: 6px 0 0;
+  color: #52616b;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.panel {
+  margin-bottom: 22px;
+  overflow-x: auto;
+}
+
+.panel h2 {
+  margin-top: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th,
+td {
+  padding: 10px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: #f8fafc;
+}

@@ -1,0 +1,129 @@
+import os
+from functools import wraps
+
+from flask import Flask, redirect, render_template, request, session, url_for
+
+from db.connection import obtener_conexion
+
+
+def _filas_como_diccionarios(cursor):
+    columnas = [columna[0] for columna in cursor.description]
+    return [dict(zip(columnas, fila)) for fila in cursor.fetchall()]
+
+
+def consultar_dashboard():
+    conn = obtener_conexion()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, timestamp, tipo_alarma, modulo, severidad, ip_origen, resuelta, descripcion
+        FROM alarmas
+        ORDER BY id DESC
+        LIMIT 50;
+    """)
+    alarmas = _filas_como_diccionarios(cur)
+
+    cur.execute("""
+        SELECT id, timestamp, modulo, evento, detalle
+        FROM eventos_sistema
+        ORDER BY id DESC
+        LIMIT 20;
+    """)
+    eventos = _filas_como_diccionarios(cur)
+
+    cur.execute("""
+        SELECT modulo, COUNT(*) AS cantidad
+        FROM alarmas
+        GROUP BY modulo
+        ORDER BY cantidad DESC;
+    """)
+    alarmas_por_modulo = _filas_como_diccionarios(cur)
+
+    cur.execute("""
+        SELECT severidad, COUNT(*) AS cantidad
+        FROM alarmas
+        GROUP BY severidad
+        ORDER BY cantidad DESC;
+    """)
+    alarmas_por_severidad = _filas_como_diccionarios(cur)
+
+    cur.execute("""
+        SELECT modulo, habilitado, intervalo_segundos, umbral
+        FROM configuracion_modulos
+        ORDER BY modulo;
+    """)
+    modulos = _filas_como_diccionarios(cur)
+
+    cur.close()
+    conn.close()
+
+    return {
+        "alarmas": alarmas,
+        "eventos": eventos,
+        "alarmas_por_modulo": alarmas_por_modulo,
+        "alarmas_por_severidad": alarmas_por_severidad,
+        "modulos": modulos,
+    }
+
+
+def crear_app(dashboard_provider=None):
+    app = Flask(__name__)
+    app.secret_key = os.environ.get("HIPS_WEB_SECRET_KEY", "cambiar-esta-clave-en-produccion")
+
+    app.config["HIPS_WEB_USER"] = os.environ.get("HIPS_WEB_USER", "admin")
+    app.config["HIPS_WEB_PASSWORD"] = os.environ.get("HIPS_WEB_PASSWORD", "admin")
+    app.config["DASHBOARD_PROVIDER"] = dashboard_provider or consultar_dashboard
+
+    def login_requerido(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not session.get("autenticado"):
+                return redirect(url_for("login"))
+            return func(*args, **kwargs)
+        return wrapper
+
+    @app.route("/", methods=["GET"])
+    def index():
+        if session.get("autenticado"):
+            return redirect(url_for("dashboard"))
+        return redirect(url_for("login"))
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        error = None
+
+        if request.method == "POST":
+            usuario = request.form.get("usuario", "")
+            password = request.form.get("password", "")
+
+            if (
+                usuario == app.config["HIPS_WEB_USER"]
+                and password == app.config["HIPS_WEB_PASSWORD"]
+            ):
+                session["autenticado"] = True
+                session["usuario"] = usuario
+                return redirect(url_for("dashboard"))
+
+            error = "Usuario o contraseña incorrectos"
+
+        return render_template("login.html", error=error)
+
+    @app.route("/dashboard", methods=["GET"])
+    @login_requerido
+    def dashboard():
+        datos = app.config["DASHBOARD_PROVIDER"]()
+        return render_template("dashboard.html", datos=datos, usuario=session.get("usuario"))
+
+    @app.route("/logout", methods=["POST"])
+    def logout():
+        session.clear()
+        return redirect(url_for("login"))
+
+    return app
+
+
+app = crear_app()
+
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=5000, debug=False)

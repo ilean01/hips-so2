@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>HIPS - Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Dashboard HIPS</h1>
+      <p>Alertas reales registradas en PostgreSQL</p>
+    </div>
+
+    <form method="post" action="{{ url_for('logout') }}">
+      <span>{{ usuario }}</span>
+      <button type="submit">Salir</button>
+    </form>
+  </header>
+
+  <main class="container">
+    <section class="cards">
+      <article class="card">
+        <h2>{{ datos.alarmas|length }}</h2>
+        <p>Últimas alarmas</p>
+      </article>
+
+      <article class="card">
+        <h2>{{ datos.eventos|length }}</h2>
+        <p>Últimos eventos</p>
+      </article>
+
+      <article class="card">
+        <h2>{{ datos.modulos|length }}</h2>
+        <p>Módulos configurados</p>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <h2>Alarmas por módulo</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Módulo</th>
+              <th>Cantidad</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in datos.alarmas_por_modulo %}
+            <tr>
+              <td>{{ item.modulo }}</td>
+              <td>{{ item.cantidad }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </article>
+
+      <article class="panel">
+        <h2>Alarmas por severidad</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Severidad</th>
+              <th>Cantidad</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in datos.alarmas_por_severidad %}
+            <tr>
+              <td>{{ item.severidad }}</td>
+              <td>{{ item.cantidad }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>Últimas alarmas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>Módulo</th>
+            <th>Severidad</th>
+            <th>IP origen</th>
+            <th>Resuelta</th>
+            <th>Descripción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for alarma in datos.alarmas %}
+          <tr>
+            <td>{{ alarma.id }}</td>
+            <td>{{ alarma.timestamp }}</td>
+            <td>{{ alarma.tipo_alarma }}</td>
+            <td>{{ alarma.modulo }}</td>
+            <td>{{ alarma.severidad }}</td>
+            <td>{{ alarma.ip_origen or "N/A" }}</td>
+            <td>{{ alarma.resuelta }}</td>
+            <td>{{ alarma.descripcion }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Eventos del sistema</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Módulo</th>
+            <th>Evento</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for evento in datos.eventos %}
+          <tr>
+            <td>{{ evento.id }}</td>
+            <td>{{ evento.timestamp }}</td>
+            <td>{{ evento.modulo }}</td>
+            <td>{{ evento.evento }}</td>
+            <td>{{ evento.detalle }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Configuración de módulos</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Módulo</th>
+            <th>Habilitado</th>
+            <th>Intervalo</th>
+            <th>Umbral</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for modulo in datos.modulos %}
+          <tr>
+            <td>{{ modulo.modulo }}</td>
+            <td>{{ modulo.habilitado }}</td>
+            <td>{{ modulo.intervalo_segundos }}</td>
+            <td>{{ modulo.umbral or "N/A" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>
