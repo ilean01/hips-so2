@@ -66,13 +66,44 @@ def consultar_dashboard():
     }
 
 
-def crear_app(dashboard_provider=None):
+def marcar_alarma_resuelta(alarma_id: int) -> None:
+    conn = obtener_conexion()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        UPDATE alarmas
+        SET resuelta = true
+        WHERE id = %s;
+        """,
+        (alarma_id,)
+    )
+
+    cur.execute(
+        """
+        INSERT INTO eventos_sistema (modulo, evento, detalle)
+        VALUES (%s, %s, %s);
+        """,
+        (
+            "web",
+            "alarma_resuelta",
+            f"Alarma {alarma_id} marcada como resuelta desde el dashboard"
+        )
+    )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def crear_app(dashboard_provider=None, resolver_provider=None):
     app = Flask(__name__)
     app.secret_key = os.environ.get("HIPS_WEB_SECRET_KEY", "cambiar-esta-clave-en-produccion")
 
     app.config["HIPS_WEB_USER"] = os.environ.get("HIPS_WEB_USER", "admin")
     app.config["HIPS_WEB_PASSWORD"] = os.environ.get("HIPS_WEB_PASSWORD", "admin")
     app.config["DASHBOARD_PROVIDER"] = dashboard_provider or consultar_dashboard
+    app.config["RESOLVER_PROVIDER"] = resolver_provider or marcar_alarma_resuelta
 
     def login_requerido(func):
         @wraps(func)
@@ -113,6 +144,12 @@ def crear_app(dashboard_provider=None):
     def dashboard():
         datos = app.config["DASHBOARD_PROVIDER"]()
         return render_template("dashboard.html", datos=datos, usuario=session.get("usuario"))
+
+    @app.route("/alarmas/<int:alarma_id>/resolver", methods=["POST"])
+    @login_requerido
+    def resolver_alarma(alarma_id):
+        app.config["RESOLVER_PROVIDER"](alarma_id)
+        return redirect(url_for("dashboard"))
 
     @app.route("/logout", methods=["POST"])
     def logout():

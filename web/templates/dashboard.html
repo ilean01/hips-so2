@@ -91,6 +91,7 @@
             <th>IP origen</th>
             <th>Resuelta</th>
             <th>Descripción</th>
+            <th>Acción</th>
           </tr>
         </thead>
         <tbody>
@@ -104,6 +105,15 @@
             <td>{{ alarma.ip_origen or "N/A" }}</td>
             <td>{{ alarma.resuelta }}</td>
             <td>{{ alarma.descripcion }}</td>
+            <td>
+              {% if not alarma.resuelta %}
+              <form method="post" action="{{ url_for('resolver_alarma', alarma_id=alarma.id) }}">
+                <button type="submit" class="btn-small">Marcar resuelta</button>
+              </form>
+              {% else %}
+              <span class="badge-ok">Resuelta</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
