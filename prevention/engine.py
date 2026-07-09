@@ -200,8 +200,21 @@ def prevenir_alerta(modulo, alerta, dry_run=True):
         usuario = extraer_usuario(alerta)
 
         if usuario and tipo in {
-            "usuario_uid_0",
             "usuario_nuevo",
+            "usuario_eliminado",
+        }:
+            return {
+                "accion": "revision_manual_usuario",
+                "modulo": modulo,
+                "tipo": tipo,
+                "usuario": usuario,
+                "dry_run": dry_run,
+                "ejecutado": False,
+                "motivo": "Cambio de usuario detectado; requiere revision humana",
+            }
+
+        if usuario and tipo in {
+            "usuario_uid_0",
             "uid_modificado",
             "shell_interactiva_agregada",
             "origen_login_inusual",

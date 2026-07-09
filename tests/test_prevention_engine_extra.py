@@ -6,7 +6,7 @@ from prevention.engine import prevenir_alertas
 
 class TestPreventionEngineExtra(unittest.TestCase):
     @patch("prevention.engine.bloquear_usuario")
-    def test_user_monitor_bloquea_usuario_sospechoso(self, mock_bloquear):
+    def test_user_monitor_bloquea_login_fuera_horario(self, mock_bloquear):
         mock_bloquear.return_value = {
             "accion": "bloquear_usuario",
             "usuario": "intruso",
@@ -17,6 +17,21 @@ class TestPreventionEngineExtra(unittest.TestCase):
         resultado = prevenir_alertas({
             "user_monitor": [
                 {
+                    "tipo": "login_fuera_horario",
+                    "usuario": "intruso",
+                    "detalle": "Usuario conectado fuera del horario esperado: 00:01",
+                }
+            ]
+        }, dry_run=False)
+
+        self.assertEqual(resultado["acciones"][0]["accion"]["accion"], "bloquear_usuario")
+        mock_bloquear.assert_called_once_with("intruso", dry_run=False)
+
+    @patch("prevention.engine.bloquear_usuario")
+    def test_user_monitor_no_bloquea_usuario_nuevo(self, mock_bloquear):
+        resultado = prevenir_alertas({
+            "user_monitor": [
+                {
                     "tipo": "usuario_nuevo",
                     "usuario": "intruso",
                     "detalle": "Se detectó un usuario nuevo: intruso",
@@ -24,8 +39,9 @@ class TestPreventionEngineExtra(unittest.TestCase):
             ]
         }, dry_run=False)
 
-        mock_bloquear.assert_called_once_with("intruso", dry_run=False)
-        self.assertEqual(resultado["acciones"][0]["accion"]["accion"], "bloquear_usuario")
+        self.assertEqual(resultado["acciones"][0]["accion"]["accion"], "revision_manual_usuario")
+        self.assertFalse(resultado["acciones"][0]["accion"]["ejecutado"])
+        mock_bloquear.assert_not_called()
 
     @patch("prevention.engine.documentar_integridad_archivo")
     def test_integridad_documenta_prevencion(self, mock_documentar):
