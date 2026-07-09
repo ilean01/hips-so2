@@ -1,10 +1,5 @@
-import os
-import shutil
-import tempfile
 import unittest
-
-LOG_DIR_TEST = tempfile.mkdtemp(prefix="hips_test_logs_")
-os.environ["HIPS_LOG_DIR"] = LOG_DIR_TEST
+from unittest.mock import patch
 
 from prevention.actions import (
     bloquear_usuario,
@@ -16,17 +11,16 @@ from prevention.actions import (
 
 
 class TestPreventionActionsExtra(unittest.TestCase):
-    @classmethod
-    def tearDownClass(cls):
-        shutil.rmtree(LOG_DIR_TEST, ignore_errors=True)
-
-    def test_no_bloquea_usuario_protegido(self):
+    @patch("prevention.actions.log_prevencion")
+    def test_no_bloquea_usuario_protegido(self, mock_log):
         accion = bloquear_usuario("ile", dry_run=False)
 
         self.assertFalse(accion["ejecutado"])
         self.assertEqual(accion["motivo"], "usuario_protegido")
+        mock_log.assert_called_once()
 
-    def test_documentar_integridad_dry_run(self):
+    @patch("prevention.actions.log_prevencion")
+    def test_documentar_integridad_dry_run(self, mock_log):
         accion = documentar_integridad_archivo(
             "/etc/passwd",
             motivo="prueba",
@@ -35,24 +29,31 @@ class TestPreventionActionsExtra(unittest.TestCase):
 
         self.assertEqual(accion["accion"], "documentar_integridad_archivo")
         self.assertFalse(accion["ejecutado"])
+        mock_log.assert_called_once()
 
-    def test_reiniciar_postfix_dry_run(self):
+    @patch("prevention.actions.log_prevencion")
+    def test_reiniciar_postfix_dry_run(self, mock_log):
         accion = reiniciar_postfix(dry_run=True)
 
         self.assertEqual(accion["accion"], "reiniciar_postfix")
         self.assertFalse(accion["ejecutado"])
+        mock_log.assert_called_once()
 
-    def test_limpiar_cola_correo_dry_run(self):
+    @patch("prevention.actions.log_prevencion")
+    def test_limpiar_cola_correo_dry_run(self, mock_log):
         accion = limpiar_cola_correo(dry_run=True)
 
         self.assertEqual(accion["accion"], "limpiar_cola_correo")
         self.assertFalse(accion["ejecutado"])
+        mock_log.assert_called_once()
 
-    def test_desactivar_promiscuo_dry_run(self):
+    @patch("prevention.actions.log_prevencion")
+    def test_desactivar_promiscuo_dry_run(self, mock_log):
         accion = desactivar_modo_promiscuo("eth0", dry_run=True)
 
         self.assertEqual(accion["accion"], "desactivar_modo_promiscuo")
         self.assertFalse(accion["ejecutado"])
+        mock_log.assert_called_once()
 
 
 if __name__ == "__main__":
