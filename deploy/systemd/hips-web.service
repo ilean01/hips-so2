@@ -1,0 +1,24 @@
+[Unit]
+Description=HIPS - Dashboard Web
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ile
+Group=ile
+WorkingDirectory=/home/ile/hips-so2
+Environment=HIPS_DB_NAME=hips_db
+Environment=HIPS_DB_USER=hips_app
+Environment=HIPS_DB_PASSWORD=hips_app_local_123
+Environment=HIPS_DB_HOST=127.0.0.1
+Environment=HIPS_WEB_USER=admin
+Environment=HIPS_WEB_PASSWORD=admin123
+Environment=HIPS_WEB_SECRET_KEY=hips-secret-local
+Environment=PYTHONPATH=/home/ile/hips-so2
+ExecStart=/usr/bin/python3 /home/ile/hips-so2/web/app.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
