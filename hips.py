@@ -19,12 +19,50 @@ def _entero_en_rango(valor, minimo=0, maximo=23, defecto=None):
     return defecto
 
 
+def _entero_positivo(valor, defecto=None):
+    try:
+        numero = int(valor)
+    except (TypeError, ValueError):
+        return defecto
+
+    if numero > 0:
+        return numero
+
+    return defecto
+
+
 def construir_entradas_desde_configuracion(configuraciones):
-    entradas = {}
+    entradas = {
+        "modulos_habilitados": set()
+    }
 
     for item in configuraciones or []:
         modulo = item.get("modulo")
+        habilitado = item.get("habilitado", True)
+        umbral = _entero_positivo(item.get("umbral"))
         configuracion = item.get("configuracion") or {}
+
+        if not modulo or not habilitado:
+            continue
+
+        entradas["modulos_habilitados"].add(modulo)
+
+        if modulo == "auth_failures" and umbral is not None:
+            entradas["auth_umbral"] = umbral
+
+        if modulo == "mail_queue" and umbral is not None:
+            entradas["mailq_umbral"] = umbral
+
+        if modulo == "ddos_monitor" and umbral is not None:
+            entradas["ddos_umbral_conexiones"] = umbral
+
+            umbral_syn = _entero_positivo(configuracion.get("ddos_umbral_syn"))
+            if umbral_syn is not None:
+                entradas["ddos_umbral_syn"] = umbral_syn
+
+        if modulo == "process_monitor" and umbral is not None:
+            entradas["cpu_umbral"] = float(umbral)
+            entradas["memoria_umbral"] = float(umbral)
 
         if modulo == "user_monitor":
             hora_inicio = _entero_en_rango(

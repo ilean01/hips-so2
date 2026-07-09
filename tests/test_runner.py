@@ -103,6 +103,45 @@ class TestRunner(unittest.TestCase):
         self.assertIn("mail_queue", alertas)
         self.assertIn("ddos_monitor", alertas)
 
+    def test_respeta_modulos_habilitados(self):
+        auth_log = Path(self.temp_dir.name) / "secure.log"
+        auth_log.write_text(
+            "\n".join([
+                "Failed password for root from 10.0.0.50 port 22 ssh2",
+                "Failed password for root from 10.0.0.50 port 22 ssh2",
+                "Failed password for root from 10.0.0.50 port 22 ssh2",
+                "Failed password for root from 10.0.0.50 port 22 ssh2",
+                "Failed password for root from 10.0.0.50 port 22 ssh2",
+            ]),
+            encoding="utf-8"
+        )
+
+        tmp_simulado = Path(self.temp_dir.name) / "tmp"
+        tmp_simulado.mkdir()
+        backdoor = tmp_simulado / "backdoor.sh"
+        backdoor.write_text("#!/bin/bash\necho test", encoding="utf-8")
+        backdoor.chmod(0o755)
+
+        entradas = {
+            "modulos_habilitados": {"tmp_monitor"},
+            "auth_log_path": str(auth_log),
+            "tmp_path": str(tmp_simulado),
+            "procesos_texto": "1234 root 99.0 99.0 nmap nmap -sS 127.0.0.1",
+            "system_logs_texto": "kernel: app[777]: segfault at 0 ip 00007f error 4",
+            "mailq_texto": "A1B2C3D4E 1234 Tue Jul 7 user@example.com",
+            "conexiones_texto": "SYN-RECV 0 0 192.168.1.10:80 10.0.0.99:20000",
+        }
+
+        alertas = ejecutar_ciclo_deteccion(entradas)
+
+        self.assertIn("tmp_monitor", alertas)
+        self.assertNotIn("auth_failures", alertas)
+        self.assertNotIn("process_monitor", alertas)
+        self.assertNotIn("sniffers", alertas)
+        self.assertNotIn("system_logs", alertas)
+        self.assertNotIn("mail_queue", alertas)
+        self.assertNotIn("ddos_monitor", alertas)
+
     def test_ejecutar_ciclo_sin_alertas_simuladas(self):
         tmp_vacio = Path(self.temp_dir.name) / "tmp_vacio"
         tmp_vacio.mkdir()

@@ -60,6 +60,38 @@ class TestHipsCli(unittest.TestCase):
 
         self.assertEqual(resultado["resumen"]["total_alertas"], 0)
 
+    def test_construir_entradas_desde_configuracion(self):
+        entradas = hips.construir_entradas_desde_configuracion([
+            {
+                "modulo": "auth_failures",
+                "habilitado": True,
+                "umbral": 7,
+                "configuracion": {},
+            },
+            {
+                "modulo": "mail_queue",
+                "habilitado": False,
+                "umbral": 20,
+                "configuracion": {},
+            },
+            {
+                "modulo": "user_monitor",
+                "habilitado": True,
+                "umbral": None,
+                "configuracion": {
+                    "login_hora_inicio": 8,
+                    "login_hora_fin": 18,
+                },
+            },
+        ])
+
+        self.assertIn("auth_failures", entradas["modulos_habilitados"])
+        self.assertIn("user_monitor", entradas["modulos_habilitados"])
+        self.assertNotIn("mail_queue", entradas["modulos_habilitados"])
+        self.assertEqual(entradas["auth_umbral"], 7)
+        self.assertEqual(entradas["login_hora_inicio"], 8)
+        self.assertEqual(entradas["login_hora_fin"], 18)
+
     def test_main_devuelve_cero_si_no_hay_error(self):
         with patch("hips.ejecutar_hips") as mock_ejecutar:
             mock_ejecutar.return_value = {

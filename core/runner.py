@@ -82,155 +82,179 @@ def agregar_alertas(alertas_por_modulo, modulo, alertas):
         alertas_por_modulo[modulo].extend(alertas)
 
 
+def modulo_habilitado(entradas, modulo):
+    modulos_habilitados = entradas.get("modulos_habilitados")
+
+    if modulos_habilitados is None:
+        return True
+
+    return modulo in set(modulos_habilitados)
+
+
 def ejecutar_ciclo_deteccion(entradas=None, registrar_alertas_logs=True):
     entradas = entradas or {}
     alertas_por_modulo = {}
 
-    baseline_archivos = entradas.get("baseline_archivos")
-    if baseline_archivos is None:
-        baseline_archivos = cargar_baseline_archivos_default()
+    if modulo_habilitado(entradas, "integridad_archivos"):
+        baseline_archivos = entradas.get("baseline_archivos")
+        if baseline_archivos is None:
+            baseline_archivos = cargar_baseline_archivos_default()
 
-    if baseline_archivos:
-        alertas = verificar_integridad(
-            baseline_archivos,
+        if baseline_archivos:
+            alertas = verificar_integridad(
+                baseline_archivos,
+                registrar_alertas=registrar_alertas_logs
+            )
+            agregar_alertas(alertas_por_modulo, "integridad_archivos", alertas)
+
+    if modulo_habilitado(entradas, "auth_failures"):
+        if "auth_log_path" in entradas:
+            auth_log_path = entradas.get("auth_log_path")
+        else:
+            auth_log_path = obtener_log_auth_default()
+
+        if auth_log_path:
+            alertas = analizar_log_auth(
+                auth_log_path,
+                umbral=entradas.get("auth_umbral", 5),
+                registrar_alertas=registrar_alertas_logs
+            )
+            agregar_alertas(alertas_por_modulo, "auth_failures", alertas)
+
+    ejecutar_process_monitor = modulo_habilitado(entradas, "process_monitor")
+    ejecutar_sniffers = modulo_habilitado(entradas, "sniffers")
+
+    procesos_texto = None
+    if ejecutar_process_monitor or ejecutar_sniffers:
+        procesos_texto = entradas.get("procesos_texto")
+        if procesos_texto is None:
+            procesos_texto = ejecutar_comando([
+                "ps",
+                "-eo",
+                "pid,user,%cpu,%mem,comm,args",
+                "--no-headers"
+            ])
+
+    if ejecutar_process_monitor:
+        alertas = analizar_procesos(
+            procesos_texto,
+            cpu_umbral=entradas.get("cpu_umbral", 80.0),
+            memoria_umbral=entradas.get("memoria_umbral", 80.0),
             registrar_alertas=registrar_alertas_logs
         )
-        agregar_alertas(alertas_por_modulo, "integridad_archivos", alertas)
+        agregar_alertas(alertas_por_modulo, "process_monitor", alertas)
 
-    if "auth_log_path" in entradas:
-        auth_log_path = entradas.get("auth_log_path")
-    else:
-        auth_log_path = obtener_log_auth_default()
-
-    if auth_log_path:
-        alertas = analizar_log_auth(
-            auth_log_path,
-            umbral=entradas.get("auth_umbral", 5),
+    if ejecutar_sniffers:
+        alertas = analizar_procesos_sniffers(
+            procesos_texto,
             registrar_alertas=registrar_alertas_logs
         )
-        agregar_alertas(alertas_por_modulo, "auth_failures", alertas)
+        agregar_alertas(alertas_por_modulo, "sniffers", alertas)
 
-    procesos_texto = entradas.get("procesos_texto")
-    if procesos_texto is None:
-        procesos_texto = ejecutar_comando([
-            "ps",
-            "-eo",
-            "pid,user,%cpu,%mem,comm,args",
-            "--no-headers"
-        ])
+        ip_link_texto = entradas.get("ip_link_texto")
+        if ip_link_texto is None:
+            ip_link_texto = ejecutar_comando(["ip", "link", "show"])
 
-    alertas = analizar_procesos(
-        procesos_texto,
-        cpu_umbral=entradas.get("cpu_umbral", 80.0),
-        memoria_umbral=entradas.get("memoria_umbral", 80.0),
-        registrar_alertas=registrar_alertas_logs
-    )
-    agregar_alertas(alertas_por_modulo, "process_monitor", alertas)
+        alertas = analizar_interfaces_promiscuas(
+            ip_link_texto,
+            interfaces_permitidas=entradas.get("interfaces_promisc_permitidas"),
+            registrar_alertas=registrar_alertas_logs
+        )
+        agregar_alertas(alertas_por_modulo, "sniffers", alertas)
 
-    alertas = analizar_procesos_sniffers(
-        procesos_texto,
-        registrar_alertas=registrar_alertas_logs
-    )
-    agregar_alertas(alertas_por_modulo, "sniffers", alertas)
+    if modulo_habilitado(entradas, "user_monitor"):
+        passwd_actual = entradas.get("passwd_actual")
+        if passwd_actual is None:
+            passwd_actual = leer_texto("/etc/passwd")
 
-    ip_link_texto = entradas.get("ip_link_texto")
-    if ip_link_texto is None:
-        ip_link_texto = ejecutar_comando(["ip", "link", "show"])
+        baseline_usuarios = entradas.get("baseline_usuarios")
+        if baseline_usuarios is None:
+            baseline_usuarios = crear_baseline_usuarios(passwd_actual)
 
-    alertas = analizar_interfaces_promiscuas(
-        ip_link_texto,
-        interfaces_permitidas=entradas.get("interfaces_promisc_permitidas"),
-        registrar_alertas=registrar_alertas_logs
-    )
-    agregar_alertas(alertas_por_modulo, "sniffers", alertas)
+        if passwd_actual and baseline_usuarios:
+            alertas = analizar_usuarios(
+                baseline_usuarios,
+                passwd_actual,
+                registrar_alertas=registrar_alertas_logs
+            )
+            agregar_alertas(alertas_por_modulo, "user_monitor", alertas)
 
-    passwd_actual = entradas.get("passwd_actual")
-    if passwd_actual is None:
-        passwd_actual = leer_texto("/etc/passwd")
+        who_texto = entradas.get("who_texto")
+        if who_texto is None:
+            who_texto = ejecutar_comando(["who"])
 
-    baseline_usuarios = entradas.get("baseline_usuarios")
-    if baseline_usuarios is None:
-        baseline_usuarios = crear_baseline_usuarios(passwd_actual)
+        origenes_permitidos = entradas.get("origenes_login_permitidos")
+        if origenes_permitidos is None:
+            origenes_permitidos = {"local", "127.0.0.1", "::1"}
 
-    if passwd_actual and baseline_usuarios:
-        alertas = analizar_usuarios(
-            baseline_usuarios,
-            passwd_actual,
+        alertas = analizar_usuarios_conectados(
+            who_texto,
+            origenes_permitidos=origenes_permitidos,
+            hora_inicio=entradas.get("login_hora_inicio", 6),
+            hora_fin=entradas.get("login_hora_fin", 23),
             registrar_alertas=registrar_alertas_logs
         )
         agregar_alertas(alertas_por_modulo, "user_monitor", alertas)
 
-    who_texto = entradas.get("who_texto")
-    if who_texto is None:
-        who_texto = ejecutar_comando(["who"])
+    if modulo_habilitado(entradas, "system_logs"):
+        system_logs_texto = entradas.get("system_logs_texto")
+        if system_logs_texto is None:
+            system_logs_texto = ejecutar_comando([
+                "journalctl",
+                "-n",
+                "200",
+                "--no-pager"
+            ])
 
-    origenes_permitidos = entradas.get("origenes_login_permitidos")
-    if origenes_permitidos is None:
-        origenes_permitidos = {"local", "127.0.0.1", "::1"}
-
-    alertas = analizar_usuarios_conectados(
-        who_texto,
-        origenes_permitidos=origenes_permitidos,
-        hora_inicio=entradas.get("login_hora_inicio", 6),
-        hora_fin=entradas.get("login_hora_fin", 23),
-        registrar_alertas=registrar_alertas_logs
-    )
-    agregar_alertas(alertas_por_modulo, "user_monitor", alertas)
-
-    system_logs_texto = entradas.get("system_logs_texto")
-    if system_logs_texto is None:
-        system_logs_texto = ejecutar_comando([
-            "journalctl",
-            "-n",
-            "200",
-            "--no-pager"
-        ])
-
-    alertas = analizar_logs_sistema(
-        system_logs_texto,
-        registrar_alertas=registrar_alertas_logs
-    )
-    agregar_alertas(alertas_por_modulo, "system_logs", alertas)
-
-    tmp_path = entradas.get("tmp_path", "/tmp")
-    if Path(tmp_path).exists():
-        alertas = escanear_tmp(
-            tmp_path,
+        alertas = analizar_logs_sistema(
+            system_logs_texto,
             registrar_alertas=registrar_alertas_logs
         )
-        agregar_alertas(alertas_por_modulo, "tmp_monitor", alertas)
+        agregar_alertas(alertas_por_modulo, "system_logs", alertas)
 
-    crontab_texto = entradas.get("crontab_texto")
-    if crontab_texto is None:
-        crontab_texto = leer_cron_sistema()
+    if modulo_habilitado(entradas, "tmp_monitor"):
+        tmp_path = entradas.get("tmp_path", "/tmp")
+        if Path(tmp_path).exists():
+            alertas = escanear_tmp(
+                tmp_path,
+                registrar_alertas=registrar_alertas_logs
+            )
+            agregar_alertas(alertas_por_modulo, "tmp_monitor", alertas)
 
-    alertas = analizar_crontab(
-        crontab_texto,
-        registrar_alertas=registrar_alertas_logs
-    )
-    agregar_alertas(alertas_por_modulo, "cron_monitor", alertas)
+    if modulo_habilitado(entradas, "cron_monitor"):
+        crontab_texto = entradas.get("crontab_texto")
+        if crontab_texto is None:
+            crontab_texto = leer_cron_sistema()
 
-    mailq_texto = entradas.get("mailq_texto")
-    if mailq_texto is None:
-        mailq_texto = ejecutar_comando(["mailq"])
+        alertas = analizar_crontab(
+            crontab_texto,
+            registrar_alertas=registrar_alertas_logs
+        )
+        agregar_alertas(alertas_por_modulo, "cron_monitor", alertas)
 
-    alertas = analizar_cola_correo(
-        mailq_texto,
-        umbral_cola=entradas.get("mailq_umbral", 20),
-        registrar_alertas=registrar_alertas_logs
-    )
-    agregar_alertas(alertas_por_modulo, "mail_queue", alertas)
+    if modulo_habilitado(entradas, "mail_queue"):
+        mailq_texto = entradas.get("mailq_texto")
+        if mailq_texto is None:
+            mailq_texto = ejecutar_comando(["mailq"])
 
-    conexiones_texto = entradas.get("conexiones_texto")
-    if conexiones_texto is None:
-        conexiones_texto = ejecutar_comando(["ss", "-tun"])
+        alertas = analizar_cola_correo(
+            mailq_texto,
+            umbral_cola=entradas.get("mailq_umbral", 20),
+            registrar_alertas=registrar_alertas_logs
+        )
+        agregar_alertas(alertas_por_modulo, "mail_queue", alertas)
 
-    alertas = analizar_conexiones_red(
-        conexiones_texto,
-        umbral_conexiones=entradas.get("ddos_umbral_conexiones", 50),
-        umbral_syn=entradas.get("ddos_umbral_syn", 20),
-        registrar_alertas=registrar_alertas_logs
-    )
-    agregar_alertas(alertas_por_modulo, "ddos_monitor", alertas)
+    if modulo_habilitado(entradas, "ddos_monitor"):
+        conexiones_texto = entradas.get("conexiones_texto")
+        if conexiones_texto is None:
+            conexiones_texto = ejecutar_comando(["ss", "-tun"])
+
+        alertas = analizar_conexiones_red(
+            conexiones_texto,
+            umbral_conexiones=entradas.get("ddos_umbral_conexiones", 50),
+            umbral_syn=entradas.get("ddos_umbral_syn", 20),
+            registrar_alertas=registrar_alertas_logs
+        )
+        agregar_alertas(alertas_por_modulo, "ddos_monitor", alertas)
 
     return alertas_por_modulo
