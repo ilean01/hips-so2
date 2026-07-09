@@ -1,3 +1,4 @@
+import json
 import os
 from functools import wraps
 
@@ -50,11 +51,19 @@ def consultar_dashboard():
     alarmas_por_severidad = _filas_como_diccionarios(cur)
 
     cur.execute("""
-        SELECT modulo, habilitado, intervalo_segundos, umbral
+        SELECT modulo, habilitado, intervalo_segundos, umbral, configuracion
         FROM configuracion_modulos
         ORDER BY modulo;
     """)
     modulos = _filas_como_diccionarios(cur)
+
+    for modulo in modulos:
+        configuracion = modulo.get("configuracion") or {}
+
+        if isinstance(configuracion, str):
+            configuracion = json.loads(configuracion)
+
+        modulo["configuracion"] = configuracion
 
     cur.execute("""
         SELECT
@@ -124,7 +133,8 @@ def actualizar_configuracion_modulo(
     modulo: str,
     habilitado: bool,
     intervalo_segundos: int,
-    umbral
+    umbral,
+    configuracion=None
 ) -> None:
     conn = obtener_conexion()
     cur = conn.cursor()
@@ -134,10 +144,17 @@ def actualizar_configuracion_modulo(
         UPDATE configuracion_modulos
         SET habilitado = %s,
             intervalo_segundos = %s,
-            umbral = %s
+            umbral = %s,
+            configuracion = COALESCE(%s::jsonb, configuracion)
         WHERE modulo = %s;
         """,
-        (habilitado, intervalo_segundos, umbral, modulo)
+        (
+            habilitado,
+            intervalo_segundos,
+            umbral,
+            json.dumps(configuracion) if configuracion is not None else None,
+            modulo
+        )
     )
 
     cur.execute(
@@ -222,12 +239,35 @@ def crear_app(dashboard_provider=None, resolver_provider=None, modulo_provider=N
         umbral_texto = request.form.get("umbral", "").strip()
         umbral = int(umbral_texto) if umbral_texto else None
 
-        app.config["MODULO_PROVIDER"](
-            modulo,
-            habilitado,
-            intervalo_segundos,
-            umbral
-        )
+        configuracion = None
+
+        if modulo == "user_monitor":
+            login_hora_inicio = int(request.form.get("login_hora_inicio", "6"))
+            login_hora_fin = int(request.form.get("login_hora_fin", "23"))
+
+            login_hora_inicio = max(0, min(23, login_hora_inicio))
+            login_hora_fin = max(0, min(23, login_hora_fin))
+
+            configuracion = {
+                "login_hora_inicio": login_hora_inicio,
+                "login_hora_fin": login_hora_fin,
+            }
+
+        if configuracion is None:
+            app.config["MODULO_PROVIDER"](
+                modulo,
+                habilitado,
+                intervalo_segundos,
+                umbral
+            )
+        else:
+            app.config["MODULO_PROVIDER"](
+                modulo,
+                habilitado,
+                intervalo_segundos,
+                umbral,
+                configuracion
+            )
 
         return redirect(url_for("dashboard"))
 

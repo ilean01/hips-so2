@@ -192,6 +192,7 @@
             <th>Habilitado</th>
             <th>Intervalo</th>
             <th>Umbral</th>
+            <th>Config. extra</th>
             <th>Acción</th>
           </tr>
         </thead>
@@ -208,6 +209,16 @@
             </td>
             <td>
                 <input type="number" name="umbral" min="0" value="{{ modulo.umbral or '' }}" class="input-small" placeholder="N/A">
+            </td>
+            <td>
+              {% if modulo.modulo == "user_monitor" %}
+                <label>Inicio</label>
+                <input type="number" name="login_hora_inicio" min="0" max="23" value="{{ modulo.configuracion.get("login_hora_inicio", 6) }}" class="input-small">
+                <label>Fin</label>
+                <input type="number" name="login_hora_fin" min="0" max="23" value="{{ modulo.configuracion.get("login_hora_fin", 23) }}" class="input-small">
+              {% else %}
+                <span>N/A</span>
+              {% endif %}
             </td>
             <td>
                 <button type="submit" class="btn-small">Guardar</button>
