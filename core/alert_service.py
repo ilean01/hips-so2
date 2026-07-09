@@ -54,6 +54,21 @@ def construir_descripcion(alerta):
     return detalle
 
 
+def evento_alerta_ya_registrado(conexion, modulo, detalle):
+    sql = """
+    SELECT id
+    FROM eventos_sistema
+    WHERE modulo = %s
+      AND evento = 'alerta_registrada'
+      AND detalle = %s
+    LIMIT 1;
+    """
+
+    with conexion.cursor() as cursor:
+        cursor.execute(sql, (modulo, detalle))
+        return cursor.fetchone() is not None
+
+
 def registrar_alerta_db(conexion, modulo, alerta):
     tipo_alarma = alerta.get("tipo") or alerta.get("evento") or "alerta_generica"
     severidad = normalizar_severidad(alerta.get("severidad"))
@@ -70,12 +85,15 @@ def registrar_alerta_db(conexion, modulo, alerta):
         resuelta=False
     )
 
-    insertar_evento_sistema(
-        conexion,
-        modulo=modulo,
-        evento="alerta_registrada",
-        detalle=f"Se registró alerta {tipo_alarma} con id {alarma_id}"
-    )
+    detalle_evento = f"Se registró alerta {tipo_alarma} con id {alarma_id}"
+
+    if not evento_alerta_ya_registrado(conexion, modulo, detalle_evento):
+        insertar_evento_sistema(
+            conexion,
+            modulo=modulo,
+            evento="alerta_registrada",
+            detalle=detalle_evento
+        )
 
     return alarma_id
 

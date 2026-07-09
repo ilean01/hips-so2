@@ -9,7 +9,7 @@ from core.engine import (
 
 class FakeCursor:
     def __init__(self):
-        self.fetchone_results = [None, [99], [99]]
+        self.fetchone_results = [None, [99], None, [99]]
         self.sqls = []
 
     def execute(self, sql, params=None):

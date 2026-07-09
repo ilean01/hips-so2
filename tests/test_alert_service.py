@@ -13,7 +13,7 @@ class FakeCursor:
     def __init__(self):
         self.sqls = []
         self.params = []
-        self.fetchone_results = [None, [10], [10], None, [10], [10]]
+        self.fetchone_results = [None, [10], None, [10], None, [10], None, [10]]
 
     def execute(self, sql, params=None):
         self.sqls.append(sql)
@@ -89,7 +89,8 @@ class TestAlertService(unittest.TestCase):
         self.assertEqual(conexion.commits, 2)
         self.assertIn("SELECT id", conexion.cursor_obj.sqls[0])
         self.assertIn("INSERT INTO alarmas", conexion.cursor_obj.sqls[1])
-        self.assertIn("INSERT INTO eventos_sistema", conexion.cursor_obj.sqls[2])
+        self.assertIn("SELECT id", conexion.cursor_obj.sqls[2])
+        self.assertIn("INSERT INTO eventos_sistema", conexion.cursor_obj.sqls[3])
 
     def test_registra_varias_alertas_db(self):
         conexion = FakeConnection()
