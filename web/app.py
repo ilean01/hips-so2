@@ -34,6 +34,7 @@ def consultar_dashboard():
     cur.execute("""
         SELECT modulo, COUNT(*) AS cantidad
         FROM alarmas
+        WHERE resuelta = false
         GROUP BY modulo
         ORDER BY cantidad DESC;
     """)
@@ -42,6 +43,7 @@ def consultar_dashboard():
     cur.execute("""
         SELECT severidad, COUNT(*) AS cantidad
         FROM alarmas
+        WHERE resuelta = false
         GROUP BY severidad
         ORDER BY cantidad DESC;
     """)

@@ -12,15 +12,21 @@ class FakeCursor:
     def __init__(self):
         self.sql = None
         self.params = None
-        self.fetchone_result = [1]
+        self.sqls = []
+        self.params_list = []
+        self.fetchone_results = [None, [1]]
         self.fetchall_result = []
 
     def execute(self, sql, params=None):
         self.sql = sql
         self.params = params
+        self.sqls.append(sql)
+        self.params_list.append(params)
 
     def fetchone(self):
-        return self.fetchone_result
+        if self.fetchone_results:
+            return self.fetchone_results.pop(0)
+        return [1]
 
     def fetchall(self):
         return self.fetchall_result
@@ -58,11 +64,31 @@ class TestDbRepository(unittest.TestCase):
         )
 
         self.assertEqual(alarma_id, 1)
-        self.assertIn("INSERT INTO alarmas", conexion.cursor_obj.sql)
+        self.assertIn("SELECT id", conexion.cursor_obj.sqls[0])
+        self.assertIn("INSERT INTO alarmas", conexion.cursor_obj.sqls[1])
         self.assertEqual(conexion.commits, 1)
+
+    def test_insertar_alarma_duplicada_devuelve_existente(self):
+        conexion = FakeConnection()
+        conexion.cursor_obj.fetchone_results = [[99]]
+
+        alarma_id = insertar_alarma(
+            conexion,
+            tipo_alarma="multiples_intentos_fallidos",
+            modulo="auth_failures",
+            descripcion="Se detectaron 5 intentos fallidos de autenticación desde sin_ip",
+            severidad="MEDIA",
+            ip_origen="sin_ip"
+        )
+
+        self.assertEqual(alarma_id, 99)
+        self.assertIn("SELECT id", conexion.cursor_obj.sqls[0])
+        self.assertEqual(len(conexion.cursor_obj.sqls), 1)
+        self.assertEqual(conexion.commits, 0)
 
     def test_insertar_evento_sistema(self):
         conexion = FakeConnection()
+        conexion.cursor_obj.fetchone_results = [[1]]
 
         evento_id = insertar_evento_sistema(
             conexion,
@@ -77,6 +103,7 @@ class TestDbRepository(unittest.TestCase):
 
     def test_insertar_accion_prevencion(self):
         conexion = FakeConnection()
+        conexion.cursor_obj.fetchone_results = [[1]]
 
         accion_id = insertar_accion_prevencion(
             conexion,

@@ -19,6 +19,9 @@ from prevention.actions import (
 IPS_NO_BLOQUEAR = {
     "",
     "N/A",
+    "sin_ip",
+    "unknown",
+    "desconocida",
     "127.0.0.1",
     "::1",
     "localhost",
@@ -236,24 +239,45 @@ def prevenir_alerta(modulo, alerta, dry_run=True):
 
 def prevenir_alertas(alertas_por_modulo, dry_run=True):
     acciones = []
+    archivos_prevenidos = {}
 
     for modulo, alertas in alertas_por_modulo.items():
         for alerta in alertas:
-            try:
-                accion = prevenir_alerta(modulo, alerta, dry_run=dry_run)
-            except Exception as error:
+            tipo = alerta.get("tipo", "desconocida")
+            archivo = extraer_archivo(alerta)
+
+            if modulo in {"tmp_monitor", "cron_monitor"} and archivo in archivos_prevenidos:
                 accion = {
-                    "accion": "error_prevencion",
-                    "modulo": modulo,
-                    "tipo": alerta.get("tipo", "desconocida"),
+                    "accion": "archivo_ya_prevenido",
+                    "archivo": archivo,
                     "dry_run": dry_run,
-                    "ejecutado": False,
-                    "error": str(error),
+                    "ejecutado": True,
+                    "motivo": "El archivo ya fue tratado por otra alerta del mismo ciclo",
+                    "accion_original": archivos_prevenidos[archivo],
                 }
+            else:
+                try:
+                    accion = prevenir_alerta(modulo, alerta, dry_run=dry_run)
+                except Exception as error:
+                    accion = {
+                        "accion": "error_prevencion",
+                        "modulo": modulo,
+                        "tipo": tipo,
+                        "dry_run": dry_run,
+                        "ejecutado": False,
+                        "error": str(error),
+                    }
+
+                if (
+                    modulo in {"tmp_monitor", "cron_monitor"}
+                    and archivo
+                    and accion.get("ejecutado") is True
+                ):
+                    archivos_prevenidos[archivo] = accion.get("accion", "prevencion_ejecutada")
 
             acciones.append({
                 "modulo": modulo,
-                "tipo": alerta.get("tipo", "desconocida"),
+                "tipo": tipo,
                 "accion": accion,
             })
 

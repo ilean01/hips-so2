@@ -92,6 +92,36 @@ class TestPreventionEngineExtra(unittest.TestCase):
         mock_limpiar.assert_called_once_with(dry_run=False)
         self.assertEqual(resultado["acciones"][0]["accion"]["accion"], "limpiar_cola_correo")
 
+    @patch("prevention.engine.cuarentenar_archivo")
+    def test_tmp_monitor_no_cuarentena_dos_veces_mismo_archivo(self, mock_cuarentena):
+        mock_cuarentena.return_value = {
+            "accion": "cuarentenar_archivo",
+            "origen": "/tmp/archivo_sospechoso.sh",
+            "destino": "/var/quarantine/hips/archivo_sospechoso.sh.hash.quarantine",
+            "dry_run": False,
+            "ejecutado": True,
+        }
+
+        resultado = prevenir_alertas({
+            "tmp_monitor": [
+                {
+                    "tipo": "extension_sospechosa_tmp",
+                    "archivo": "/tmp/archivo_sospechoso.sh",
+                    "detalle": "Archivo con extensión sospechosa",
+                },
+                {
+                    "tipo": "ejecutable_en_tmp",
+                    "archivo": "/tmp/archivo_sospechoso.sh",
+                    "detalle": "Archivo ejecutable detectado",
+                },
+            ]
+        }, dry_run=False)
+
+        self.assertEqual(mock_cuarentena.call_count, 1)
+        self.assertEqual(resultado["acciones"][0]["accion"]["accion"], "cuarentenar_archivo")
+        self.assertEqual(resultado["acciones"][1]["accion"]["accion"], "archivo_ya_prevenido")
+        self.assertTrue(resultado["acciones"][1]["accion"]["ejecutado"])
+
 
 if __name__ == "__main__":
     unittest.main()

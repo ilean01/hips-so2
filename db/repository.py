@@ -1,6 +1,35 @@
 import json
 
 
+def buscar_alarma_pendiente_duplicada(
+    conexion,
+    tipo_alarma: str,
+    modulo: str,
+    descripcion: str,
+    ip_origen=None,
+):
+    sql = """
+    SELECT id
+    FROM alarmas
+    WHERE tipo_alarma = %s
+      AND modulo = %s
+      AND COALESCE(ip_origen, '') = COALESCE(%s, '')
+      AND COALESCE(descripcion, '') = COALESCE(%s, '')
+      AND resuelta = false
+    ORDER BY id DESC
+    LIMIT 1;
+    """
+
+    with conexion.cursor() as cursor:
+        cursor.execute(sql, (tipo_alarma, modulo, ip_origen, descripcion))
+        fila = cursor.fetchone()
+
+    if fila:
+        return fila[0]
+
+    return None
+
+
 def insertar_alarma(
     conexion,
     tipo_alarma: str,
@@ -10,6 +39,18 @@ def insertar_alarma(
     ip_origen=None,
     resuelta: bool = False
 ) -> int:
+    if not resuelta:
+        alarma_existente = buscar_alarma_pendiente_duplicada(
+            conexion,
+            tipo_alarma=tipo_alarma,
+            modulo=modulo,
+            descripcion=descripcion,
+            ip_origen=ip_origen,
+        )
+
+        if alarma_existente is not None:
+            return alarma_existente
+
     sql = """
     INSERT INTO alarmas (tipo_alarma, ip_origen, modulo, descripcion, severidad, resuelta)
     VALUES (%s, %s, %s, %s, %s, %s)
