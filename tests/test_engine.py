@@ -16,7 +16,9 @@ class FakeCursor:
         self.sqls.append(sql)
 
     def fetchone(self):
-        return self.fetchone_result
+        if self.fetchone_results:
+            return self.fetchone_results.pop(0)
+        return [1]
 
     def __enter__(self):
         return self
