@@ -93,3 +93,75 @@ def analizar_procesos_sniffers(salida_procesos: str, registrar_alertas: bool = T
             )
 
     return alertas
+
+
+
+INTERFACES_PROMISCUAS_PERMITIDAS = {
+    "lo",
+    "docker0",
+    "virbr0",
+}
+
+
+def detectar_interfaces_promiscuas(salida_ip_link: str, interfaces_permitidas=None) -> list[dict]:
+    if interfaces_permitidas is None:
+        interfaces_permitidas = INTERFACES_PROMISCUAS_PERMITIDAS
+
+    interfaces_permitidas = set(interfaces_permitidas)
+    alertas = []
+
+    for linea in salida_ip_link.splitlines():
+        linea_limpia = linea.strip()
+
+        if not linea_limpia:
+            continue
+
+        partes = linea_limpia.split(":", 2)
+
+        if len(partes) < 3 or not partes[0].strip().isdigit():
+            continue
+
+        interfaz = partes[1].strip().split("@")[0]
+        resto = partes[2]
+
+        if "<" not in resto or ">" not in resto:
+            continue
+
+        flags = resto.split("<", 1)[1].split(">", 1)[0].split(",")
+        flags = {flag.strip().upper() for flag in flags}
+
+        if "PROMISC" in flags and interfaz not in interfaces_permitidas:
+            alertas.append({
+                "tipo": "interfaz_promiscua",
+                "interfaz": interfaz,
+                "detalle": f"Interfaz en modo promiscuo detectada: {interfaz}",
+                "linea": linea_limpia,
+            })
+
+    return alertas
+
+
+def analizar_interfaces_promiscuas(
+    salida_ip_link: str,
+    interfaces_permitidas=None,
+    registrar_alertas: bool = True
+) -> list[dict]:
+    alertas = detectar_interfaces_promiscuas(
+        salida_ip_link,
+        interfaces_permitidas=interfaces_permitidas
+    )
+
+    if registrar_alertas:
+        for alerta in alertas:
+            log_alarma(
+                modulo="sniffers",
+                severidad="alta",
+                evento=alerta["tipo"],
+                detalle=alerta["detalle"],
+                extra={
+                    "interfaz": alerta["interfaz"],
+                    "linea": alerta["linea"],
+                }
+            )
+
+    return alertas

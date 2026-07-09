@@ -32,6 +32,7 @@ def datos_fake():
         "alarmas_por_severidad": [
             {"severidad": "ALTA", "cantidad": 1}
         ],
+        "acciones_prevencion": [],
         "modulos": [
             {
                 "modulo": "system_logs",

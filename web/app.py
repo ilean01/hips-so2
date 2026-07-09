@@ -54,6 +54,23 @@ def consultar_dashboard():
     """)
     modulos = _filas_como_diccionarios(cur)
 
+    cur.execute("""
+        SELECT
+            ap.id,
+            ap.timestamp,
+            ap.alarma_id,
+            a.modulo,
+            a.tipo_alarma,
+            ap.accion,
+            ap.resultado,
+            ap.detalle
+        FROM acciones_prevencion ap
+        JOIN alarmas a ON a.id = ap.alarma_id
+        ORDER BY ap.id DESC
+        LIMIT 30;
+    """)
+    acciones_prevencion = _filas_como_diccionarios(cur)
+
     cur.close()
     conn.close()
 
@@ -63,6 +80,7 @@ def consultar_dashboard():
         "alarmas_por_modulo": alarmas_por_modulo,
         "alarmas_por_severidad": alarmas_por_severidad,
         "modulos": modulos,
+        "acciones_prevencion": acciones_prevencion,
     }
 
 

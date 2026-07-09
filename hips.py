@@ -87,7 +87,7 @@ def ejecutar_hips(args=None):
     )
 
     if opciones.prevenir:
-        from prevention.engine import prevenir_alertas, marcar_alarmas_prevenidas_resueltas
+        from prevention.engine import prevenir_alertas, registrar_acciones_prevencion_db, marcar_alarmas_prevenidas_resueltas
 
         resultado["prevencion"] = prevenir_alertas(
             alertas_por_modulo,
@@ -95,15 +95,23 @@ def ejecutar_hips(args=None):
         )
 
         if opciones.guardar_db and not opciones.prevenir_dry_run:
+            resultado["acciones_prevencion_db"] = registrar_acciones_prevencion_db(
+                conexion,
+                resultado.get("persistencia"),
+                resultado.get("prevencion")
+            )
+
             resultado["resolucion_automatica"] = marcar_alarmas_prevenidas_resueltas(
                 conexion,
                 resultado.get("persistencia"),
                 resultado.get("prevencion")
             )
         else:
+            resultado["acciones_prevencion_db"] = None
             resultado["resolucion_automatica"] = None
     else:
         resultado["prevencion"] = None
+        resultado["acciones_prevencion_db"] = None
         resultado["resolucion_automatica"] = None
 
     if conexion is not None:

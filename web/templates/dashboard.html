@@ -34,6 +34,11 @@
         <h2>{{ datos.modulos|length }}</h2>
         <p>Módulos configurados</p>
       </article>
+
+      <article class="card">
+        <h2>{{ datos.acciones_prevencion|length }}</h2>
+        <p>Acciones de prevención</p>
+      </article>
     </section>
 
     <section class="grid">
@@ -114,6 +119,38 @@
               <span class="badge-ok">Resuelta</span>
               {% endif %}
             </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Acciones de prevención</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Alarma</th>
+            <th>Módulo</th>
+            <th>Tipo</th>
+            <th>Acción</th>
+            <th>Resultado</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for accion in datos.acciones_prevencion %}
+          <tr>
+            <td>{{ accion.id }}</td>
+            <td>{{ accion.timestamp }}</td>
+            <td>{{ accion.alarma_id }}</td>
+            <td>{{ accion.modulo }}</td>
+            <td>{{ accion.tipo_alarma }}</td>
+            <td>{{ accion.accion }}</td>
+            <td>{{ accion.resultado }}</td>
+            <td>{{ accion.detalle }}</td>
           </tr>
           {% endfor %}
         </tbody>

@@ -141,3 +141,248 @@ def cuarentenar_archivo(ruta_archivo: str, ruta_cuarentena: str = "/var/quaranti
     )
 
     return accion
+
+
+USUARIOS_PROTEGIDOS = {
+    "root",
+    "ile",
+    "postgres",
+    "hips_app",
+    "hips_svc",
+}
+
+
+def _usuario_valido(usuario: str) -> bool:
+    return bool(re.match(r"^[a-z_][a-z0-9_-]*\$?$", usuario or ""))
+
+
+def _accion_protegida(nombre_accion: str, usuario: str, dry_run: bool) -> dict:
+    accion = {
+        "accion": nombre_accion,
+        "usuario": usuario,
+        "dry_run": dry_run,
+        "ejecutado": False,
+        "motivo": "usuario_protegido",
+    }
+
+    log_prevencion(
+        modulo="prevention_actions",
+        severidad="alta",
+        evento=nombre_accion,
+        detalle=f"No se ejecutó {nombre_accion} sobre usuario protegido: {usuario}",
+        extra=accion
+    )
+
+    return accion
+
+
+def bloquear_usuario(usuario: str, dry_run: bool = True) -> dict:
+    if not _usuario_valido(usuario):
+        raise ValueError(f"Usuario inválido: {usuario}")
+
+    if usuario in USUARIOS_PROTEGIDOS:
+        return _accion_protegida("bloquear_usuario", usuario, dry_run)
+
+    comando = [
+        "sudo",
+        "passwd",
+        "-l",
+        usuario
+    ]
+
+    accion = {
+        "accion": "bloquear_usuario",
+        "usuario": usuario,
+        "dry_run": dry_run,
+        "comandos": [" ".join(comando)],
+        "ejecutado": False,
+    }
+
+    if not dry_run:
+        _ejecutar_comando(comando)
+        accion["ejecutado"] = True
+
+    log_prevencion(
+        modulo="prevention_actions",
+        severidad="alta",
+        evento="bloquear_usuario",
+        detalle=f"Acción de prevención para bloquear usuario {usuario}",
+        extra=accion
+    )
+
+    return accion
+
+
+def cambiar_password_usuario(usuario: str, dry_run: bool = True) -> dict:
+    import secrets
+
+    if not _usuario_valido(usuario):
+        raise ValueError(f"Usuario inválido: {usuario}")
+
+    if usuario in USUARIOS_PROTEGIDOS:
+        return _accion_protegida("cambiar_password_usuario", usuario, dry_run)
+
+    nueva_password = secrets.token_urlsafe(24)
+    comando_visible = f"echo '{usuario}:********' | sudo chpasswd"
+
+    accion = {
+        "accion": "cambiar_password_usuario",
+        "usuario": usuario,
+        "dry_run": dry_run,
+        "comandos": [comando_visible],
+        "nueva_password_generada": True,
+        "ejecutado": False,
+    }
+
+    if not dry_run:
+        subprocess.run(
+            ["sudo", "chpasswd"],
+            input=f"{usuario}:{nueva_password}\n",
+            text=True,
+            capture_output=True,
+            check=True
+        )
+        accion["ejecutado"] = True
+
+    log_prevencion(
+        modulo="prevention_actions",
+        severidad="alta",
+        evento="cambiar_password_usuario",
+        detalle=f"Acción de prevención para cambiar contraseña del usuario {usuario}",
+        extra=accion
+    )
+
+    return accion
+
+
+def reiniciar_postfix(dry_run: bool = True) -> dict:
+    comando = ["sudo", "systemctl", "restart", "postfix"]
+
+    accion = {
+        "accion": "reiniciar_postfix",
+        "dry_run": dry_run,
+        "comandos": [" ".join(comando)],
+        "ejecutado": False,
+    }
+
+    if not dry_run:
+        _ejecutar_comando(comando)
+        accion["ejecutado"] = True
+
+    log_prevencion(
+        modulo="prevention_actions",
+        severidad="alta",
+        evento="reiniciar_postfix",
+        detalle="Acción de prevención para reiniciar Postfix",
+        extra=accion
+    )
+
+    return accion
+
+
+def pausar_postfix(dry_run: bool = True) -> dict:
+    comando = ["sudo", "systemctl", "stop", "postfix"]
+
+    accion = {
+        "accion": "pausar_postfix",
+        "dry_run": dry_run,
+        "comandos": [" ".join(comando)],
+        "ejecutado": False,
+    }
+
+    if not dry_run:
+        _ejecutar_comando(comando)
+        accion["ejecutado"] = True
+
+    log_prevencion(
+        modulo="prevention_actions",
+        severidad="alta",
+        evento="pausar_postfix",
+        detalle="Acción de prevención para pausar Postfix",
+        extra=accion
+    )
+
+    return accion
+
+
+def limpiar_cola_correo(dry_run: bool = True) -> dict:
+    comando = ["sudo", "postsuper", "-d", "ALL", "deferred"]
+
+    accion = {
+        "accion": "limpiar_cola_correo",
+        "dry_run": dry_run,
+        "comandos": [" ".join(comando)],
+        "ejecutado": False,
+        "alcance": "solo_mensajes_deferred",
+    }
+
+    if not dry_run:
+        _ejecutar_comando(comando)
+        accion["ejecutado"] = True
+
+    log_prevencion(
+        modulo="prevention_actions",
+        severidad="alta",
+        evento="limpiar_cola_correo",
+        detalle="Acción de prevención para limpiar mensajes diferidos de la cola de correo",
+        extra=accion
+    )
+
+    return accion
+
+
+def documentar_integridad_archivo(ruta_archivo: str, motivo: str = "", dry_run: bool = True) -> dict:
+    accion = {
+        "accion": "documentar_integridad_archivo",
+        "archivo": ruta_archivo,
+        "motivo": motivo,
+        "dry_run": dry_run,
+        "ejecutado": not dry_run,
+    }
+
+    log_prevencion(
+        modulo="prevention_actions",
+        severidad="alta",
+        evento="documentar_integridad_archivo",
+        detalle=f"Acción preventiva documentada para integridad de archivo: {ruta_archivo}",
+        extra=accion
+    )
+
+    return accion
+
+
+def desactivar_modo_promiscuo(interfaz: str, dry_run: bool = True) -> dict:
+    if not re.match(r"^[a-zA-Z0-9_.:-]+$", interfaz or ""):
+        raise ValueError(f"Interfaz inválida: {interfaz}")
+
+    comando = [
+        "sudo",
+        "ip",
+        "link",
+        "set",
+        interfaz,
+        "promisc",
+        "off"
+    ]
+
+    accion = {
+        "accion": "desactivar_modo_promiscuo",
+        "interfaz": interfaz,
+        "dry_run": dry_run,
+        "comandos": [" ".join(comando)],
+        "ejecutado": False,
+    }
+
+    if not dry_run:
+        _ejecutar_comando(comando)
+        accion["ejecutado"] = True
+
+    log_prevencion(
+        modulo="prevention_actions",
+        severidad="alta",
+        evento="desactivar_modo_promiscuo",
+        detalle=f"Acción de prevención para desactivar modo promiscuo en {interfaz}",
+        extra=accion
+    )
+
+    return accion

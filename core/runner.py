@@ -7,7 +7,7 @@ from detection.ddos_monitor import analizar_conexiones_red
 from detection.file_integrity import cargar_baseline, verificar_integridad
 from detection.mail_queue import analizar_cola_correo
 from detection.process_monitor import analizar_procesos
-from detection.sniffers import analizar_procesos_sniffers
+from detection.sniffers import analizar_procesos_sniffers, analizar_interfaces_promiscuas
 from detection.system_logs import analizar_logs_sistema
 from detection.tmp_monitor import escanear_tmp
 from detection.user_monitor import crear_baseline_usuarios, analizar_usuarios, analizar_usuarios_conectados
@@ -78,7 +78,8 @@ def cargar_baseline_archivos_default():
 
 def agregar_alertas(alertas_por_modulo, modulo, alertas):
     if alertas:
-        alertas_por_modulo[modulo] = alertas
+        alertas_por_modulo.setdefault(modulo, [])
+        alertas_por_modulo[modulo].extend(alertas)
 
 
 def ejecutar_ciclo_deteccion(entradas=None, registrar_alertas_logs=True):
@@ -128,6 +129,17 @@ def ejecutar_ciclo_deteccion(entradas=None, registrar_alertas_logs=True):
 
     alertas = analizar_procesos_sniffers(
         procesos_texto,
+        registrar_alertas=registrar_alertas_logs
+    )
+    agregar_alertas(alertas_por_modulo, "sniffers", alertas)
+
+    ip_link_texto = entradas.get("ip_link_texto")
+    if ip_link_texto is None:
+        ip_link_texto = ejecutar_comando(["ip", "link", "show"])
+
+    alertas = analizar_interfaces_promiscuas(
+        ip_link_texto,
+        interfaces_permitidas=entradas.get("interfaces_promisc_permitidas"),
         registrar_alertas=registrar_alertas_logs
     )
     agregar_alertas(alertas_por_modulo, "sniffers", alertas)

@@ -1,7 +1,19 @@
+import json
 import os
 import re
 
-from prevention.actions import bloquear_ip, finalizar_proceso, cuarentenar_archivo
+from prevention.actions import (
+    bloquear_ip,
+    finalizar_proceso,
+    cuarentenar_archivo,
+    bloquear_usuario,
+    cambiar_password_usuario,
+    reiniciar_postfix,
+    pausar_postfix,
+    limpiar_cola_correo,
+    documentar_integridad_archivo,
+    desactivar_modo_promiscuo,
+)
 
 
 IPS_NO_BLOQUEAR = {
@@ -79,6 +91,10 @@ def extraer_archivo(alerta):
     if match_cron:
         return match_cron.group(1).strip()
 
+    match_etc = re.search(r"(/etc/[^\s,;]+)", texto)
+    if match_etc:
+        return match_etc.group(1).strip()
+
     return None
 
 
@@ -100,6 +116,46 @@ def extraer_ip(alerta):
     return ip
 
 
+def extraer_usuario(alerta):
+    valor = _obtener_valor(alerta, ["usuario", "user", "username"])
+    if valor:
+        return str(valor).strip()
+
+    texto = " ".join([
+        str(alerta.get("detalle", "")),
+        str(alerta.get("descripcion", "")),
+    ])
+
+    match_usuario = re.search(r"usuario\s+([a-z_][a-z0-9_-]*\$?)", texto, re.IGNORECASE)
+    if match_usuario:
+        return match_usuario.group(1)
+
+    return None
+
+
+def extraer_interfaz(alerta):
+    valor = _obtener_valor(alerta, ["interfaz", "interface", "iface"])
+    if valor:
+        return str(valor).strip()
+
+    texto = " ".join([
+        str(alerta.get("detalle", "")),
+        str(alerta.get("descripcion", "")),
+        str(alerta.get("linea", "")),
+    ])
+
+    match = re.search(
+        r"interfaz\s+(?:en modo promiscuo\s+)?(?:detectada:\s*)?([a-zA-Z0-9_.:-]+)",
+        texto,
+        re.IGNORECASE
+    )
+
+    if match:
+        return match.group(1)
+
+    return None
+
+
 def prevenir_alerta(modulo, alerta, dry_run=True):
     tipo = alerta.get("tipo", "desconocida")
 
@@ -113,7 +169,21 @@ def prevenir_alerta(modulo, alerta, dry_run=True):
         if archivo:
             return cuarentenar_archivo(archivo, dry_run=dry_run)
 
+    if modulo == "integridad_archivos":
+        archivo = extraer_archivo(alerta)
+        if archivo:
+            return documentar_integridad_archivo(
+                archivo,
+                motivo=alerta.get("detalle", tipo),
+                dry_run=dry_run
+            )
+
     if modulo == "sniffers":
+        if tipo == "interfaz_promiscua":
+            interfaz = extraer_interfaz(alerta)
+            if interfaz:
+                return desactivar_modo_promiscuo(interfaz, dry_run=dry_run)
+
         pid = extraer_pid(alerta)
         if pid and pid != os.getpid():
             return finalizar_proceso(pid, dry_run=dry_run)
@@ -123,7 +193,33 @@ def prevenir_alerta(modulo, alerta, dry_run=True):
         if pid and pid != os.getpid():
             return finalizar_proceso(pid, dry_run=dry_run)
 
-    if modulo in {"ddos_monitor", "auth_failures", "system_logs", "mail_queue"}:
+    if modulo == "user_monitor":
+        usuario = extraer_usuario(alerta)
+
+        if usuario and tipo in {
+            "usuario_uid_0",
+            "usuario_nuevo",
+            "uid_modificado",
+            "shell_interactiva_agregada",
+            "origen_login_inusual",
+            "login_fuera_horario",
+        }:
+            return bloquear_usuario(usuario, dry_run=dry_run)
+
+        if usuario and tipo == "credenciales_comprometidas":
+            return cambiar_password_usuario(usuario, dry_run=dry_run)
+
+    if modulo == "mail_queue":
+        if tipo == "cola_correo_alta":
+            return limpiar_cola_correo(dry_run=dry_run)
+
+        if tipo in {"correo_diferido", "error_conexion_correo", "rebote_correo"}:
+            return reiniciar_postfix(dry_run=dry_run)
+
+        if tipo == "posible_spam_correo":
+            return pausar_postfix(dry_run=dry_run)
+
+    if modulo in {"ddos_monitor", "auth_failures", "system_logs"}:
         ip = extraer_ip(alerta)
         if ip:
             return bloquear_ip(ip, dry_run=dry_run)
@@ -168,6 +264,22 @@ def prevenir_alertas(alertas_por_modulo, dry_run=True):
     }
 
 
+def _acciones_con_alarmas(persistencia: dict, resultado_prevencion: dict):
+    indices_por_modulo = {}
+
+    for item in resultado_prevencion.get("acciones", []):
+        modulo = item.get("modulo")
+        accion = item.get("accion", {})
+
+        indice = indices_por_modulo.get(modulo, 0)
+        indices_por_modulo[modulo] = indice + 1
+
+        ids_modulo = persistencia.get(modulo, {}).get("ids", []) if persistencia else []
+        alarma_id = ids_modulo[indice] if indice < len(ids_modulo) else None
+
+        yield alarma_id, modulo, item.get("tipo", "desconocida"), accion
+
+
 def marcar_alarmas_prevenidas_resueltas(conexion, persistencia: dict, resultado_prevencion: dict) -> dict:
     if conexion is None:
         return {
@@ -183,20 +295,11 @@ def marcar_alarmas_prevenidas_resueltas(conexion, persistencia: dict, resultado_
             "motivo": "sin_datos"
         }
 
-    acciones_por_modulo = {}
-    for item in resultado_prevencion.get("acciones", []):
-        modulo = item.get("modulo")
-        accion = item.get("accion", {})
-
-        if accion.get("ejecutado") is True:
-            acciones_por_modulo.setdefault(modulo, 0)
-            acciones_por_modulo[modulo] += 1
-
     ids_a_resolver = []
 
-    for modulo, cantidad_acciones in acciones_por_modulo.items():
-        ids_modulo = persistencia.get(modulo, {}).get("ids", [])
-        ids_a_resolver.extend(ids_modulo[:cantidad_acciones])
+    for alarma_id, _modulo, _tipo, accion in _acciones_con_alarmas(persistencia, resultado_prevencion):
+        if alarma_id is not None and accion.get("ejecutado") is True:
+            ids_a_resolver.append(alarma_id)
 
     if not ids_a_resolver:
         return {
@@ -233,4 +336,65 @@ def marcar_alarmas_prevenidas_resueltas(conexion, persistencia: dict, resultado_
         "actualizadas": len(ids_actualizadas),
         "ids": ids_actualizadas,
         "motivo": "prevencion_ejecutada"
+    }
+
+
+
+def registrar_acciones_prevencion_db(conexion, persistencia: dict, resultado_prevencion: dict) -> dict:
+    if conexion is None:
+        return {
+            "cantidad": 0,
+            "ids": [],
+            "motivo": "sin_conexion"
+        }
+
+    if not persistencia or not resultado_prevencion:
+        return {
+            "cantidad": 0,
+            "ids": [],
+            "motivo": "sin_datos"
+        }
+
+    ids_insertados = []
+    cur = conexion.cursor()
+
+    for alarma_id, modulo, tipo, accion in _acciones_con_alarmas(persistencia, resultado_prevencion):
+        if alarma_id is None:
+            continue
+
+        nombre_accion = accion.get("accion", "desconocida")
+
+        if nombre_accion == "error_prevencion":
+            resultado = "error"
+        elif accion.get("ejecutado") is True:
+            resultado = "ejecutado"
+        else:
+            resultado = "no_ejecutado"
+
+        detalle = json.dumps({
+            "modulo": modulo,
+            "tipo": tipo,
+            "accion": accion,
+        }, ensure_ascii=False)
+
+        cur.execute("""
+            INSERT INTO acciones_prevencion (alarma_id, accion, resultado, detalle)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id;
+        """, (
+            alarma_id,
+            nombre_accion,
+            resultado,
+            detalle
+        ))
+
+        ids_insertados.append(cur.fetchone()[0])
+
+    conexion.commit()
+    cur.close()
+
+    return {
+        "cantidad": len(ids_insertados),
+        "ids": ids_insertados,
+        "motivo": "acciones_registradas"
     }
