@@ -415,6 +415,22 @@ def registrar_acciones_prevencion_db(conexion, persistencia: dict, resultado_pre
         }, ensure_ascii=False)
 
         cur.execute("""
+            SELECT id
+            FROM acciones_prevencion
+            WHERE alarma_id = %s
+              AND accion = %s
+              AND resultado = %s
+            LIMIT 1;
+        """, (
+            alarma_id,
+            nombre_accion,
+            resultado
+        ))
+
+        if cur.fetchone():
+            continue
+
+        cur.execute("""
             INSERT INTO acciones_prevencion (alarma_id, accion, resultado, detalle)
             VALUES (%s, %s, %s, %s)
             RETURNING id;
