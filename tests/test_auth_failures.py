@@ -6,6 +6,7 @@ from pathlib import Path
 from detection.auth_failures import (
     es_intento_fallido,
     extraer_ip,
+    extraer_usuario,
     analizar_log_auth,
 )
 
@@ -57,6 +58,27 @@ class TestAuthFailures(unittest.TestCase):
         alertas = analizar_log_auth(str(self.log_auth), umbral=5)
 
         self.assertEqual(len(alertas), 0)
+
+    def test_detecta_credential_stuffing(self):
+        contenido = "\n".join([
+            "Jul 7 sshd[1]: Invalid user admin from 203.0.113.10 port 22",
+            "Jul 7 sshd[2]: Invalid user soporte from 203.0.113.10 port 22",
+            "Jul 7 sshd[3]: Failed password for root from 203.0.113.10 port 22 ssh2",
+            "Jul 7 sshd[4]: Failed publickey for backup from 203.0.113.10 port 22 ssh2",
+        ])
+
+        self.log_auth.write_text(contenido, encoding="utf-8")
+
+        alertas = analizar_log_auth(
+            str(self.log_auth),
+            umbral=99,
+            umbral_usuarios=4
+        )
+
+        self.assertEqual(len(alertas), 1)
+        self.assertEqual(alertas[0]["tipo"], "credential_stuffing")
+        self.assertEqual(alertas[0]["ip"], "203.0.113.10")
+        self.assertEqual(alertas[0]["cantidad_usuarios"], 4)
 
 
 if __name__ == "__main__":

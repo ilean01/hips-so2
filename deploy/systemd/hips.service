@@ -1,0 +1,16 @@
+[Unit]
+Description=HIPS - deteccion y prevencion automatica
+After=network-online.target postgresql.service postfix.service firewalld.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ile/hips-so2
+EnvironmentFile=/etc/hips/hips.env
+Environment=HIPS_DB_NAME=hips_db
+Environment=HIPS_DB_USER=hips_app
+Environment=HIPS_DB_HOST=127.0.0.1
+Environment=HIPS_ADMIN_EMAIL=ile@localhost
+Environment=HIPS_SENDMAIL_PATH=/usr/sbin/sendmail
+Environment=PYTHONPATH=/home/ile/hips-so2
+ExecStart=/usr/bin/python3 /home/ile/hips-so2/hips.py --guardar-db --enviar-email --prevenir --json

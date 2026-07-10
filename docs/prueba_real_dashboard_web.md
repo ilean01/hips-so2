@@ -25,7 +25,7 @@ Usuario:
 
 Contraseña:
 
-`admin123`
+`CAMBIAR_ESTA_CONTRASENA_WEB`
 
 ## Visualización de datos reales
 

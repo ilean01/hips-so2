@@ -67,6 +67,24 @@ def leer_cron_sistema():
     return "\n".join(partes)
 
 
+def leer_http_access_logs_default():
+    candidatos = [
+        "/var/log/httpd/access.log",
+        "/var/log/httpd/access_log",
+        "/var/log/apache2/access.log",
+        "/var/log/nginx/access.log",
+    ]
+
+    partes = []
+
+    for ruta in candidatos:
+        path = Path(ruta)
+        if path.exists():
+            partes.append(leer_texto(str(path)))
+
+    return "\n".join(partes)
+
+
 def cargar_baseline_archivos_default():
     ruta = Path("config/baseline_archivos.json")
 
@@ -206,9 +224,20 @@ def ejecutar_ciclo_deteccion(entradas=None, registrar_alertas_logs=True):
                 "--no-pager"
             ])
 
+        http_access_log_texto = entradas.get("http_access_log_texto")
+        if http_access_log_texto is None:
+            if "http_access_log_path" in entradas:
+                http_access_log_texto = leer_texto(entradas.get("http_access_log_path"))
+            else:
+                http_access_log_texto = leer_http_access_logs_default()
+
+        if http_access_log_texto:
+            system_logs_texto = "\n".join([system_logs_texto, http_access_log_texto])
+
         alertas = analizar_logs_sistema(
             system_logs_texto,
-            registrar_alertas=registrar_alertas_logs
+            registrar_alertas=registrar_alertas_logs,
+            umbral_http_404=entradas.get("http_404_umbral", 20)
         )
         agregar_alertas(alertas_por_modulo, "system_logs", alertas)
 

@@ -58,6 +58,28 @@ class TestSystemLogs(unittest.TestCase):
         self.assertIn("sudo_fallido", tipos)
         self.assertIn("segfault_detectado", tipos)
 
+    def test_detecta_scanner_http_patron_sospechoso(self):
+        linea = '203.0.113.20 - - [09/Jul/2026:10:00:00 -0300] "GET /wp-admin/setup-config.php HTTP/1.1" 404 120 "-" "nikto"'
+        alerta = analizar_linea_log(linea)
+
+        self.assertIsNotNone(alerta)
+        self.assertEqual(alerta["tipo"], "scanner_http")
+        self.assertEqual(alerta["ip"], "203.0.113.20")
+
+    def test_detecta_scanner_http_por_muchos_404(self):
+        contenido = "\n".join([
+            '203.0.113.21 - - [09/Jul/2026:10:00:00 -0300] "GET /noexiste1 HTTP/1.1" 404 120',
+            '203.0.113.21 - - [09/Jul/2026:10:00:01 -0300] "GET /noexiste2 HTTP/1.1" 404 120',
+            '203.0.113.21 - - [09/Jul/2026:10:00:02 -0300] "GET /noexiste3 HTTP/1.1" 404 120',
+        ])
+
+        alertas = analizar_logs_sistema(contenido, umbral_http_404=3)
+        tipos = [alerta["tipo"] for alerta in alertas]
+
+        self.assertIn("scanner_http", tipos)
+        self.assertEqual(alertas[-1]["ip"], "203.0.113.21")
+        self.assertEqual(alertas[-1]["cantidad_404"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()

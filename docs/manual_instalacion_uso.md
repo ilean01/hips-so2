@@ -33,8 +33,8 @@ Ejemplo de configuración local:
     export HIPS_SENDMAIL_PATH="/usr/sbin/sendmail"
 
     export HIPS_WEB_USER="admin"
-    export HIPS_WEB_PASSWORD="admin123"
-    export HIPS_WEB_SECRET_KEY="hips-secret-local"
+    export HIPS_WEB_PASSWORD="CAMBIAR_ESTA_CONTRASENA_WEB"
+    export HIPS_WEB_SECRET_KEY="CAMBIAR_ESTA_CLAVE_SECRETA_WEB"
 
     export PYTHONPATH="$PWD"
 
@@ -89,7 +89,7 @@ Usuario de prueba:
 
 Contraseña de prueba:
 
-    admin123
+    CAMBIAR_ESTA_CONTRASENA_WEB
 
 ## Funciones del dashboard
 
