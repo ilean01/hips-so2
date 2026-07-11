@@ -176,10 +176,18 @@ def actualizar_configuracion_modulo(
 
 def crear_app(dashboard_provider=None, resolver_provider=None, modulo_provider=None):
     app = Flask(__name__)
-    app.secret_key = os.environ.get("HIPS_WEB_SECRET_KEY", "cambiar-esta-clave-en-produccion")
+    app.secret_key = os.environ.get("HIPS_WEB_SECRET_KEY")
+    app.config["HIPS_WEB_USER"] = os.environ.get("HIPS_WEB_USER", "admin")
+    app.config["HIPS_WEB_PASSWORD"] = os.environ.get("HIPS_WEB_PASSWORD")
+
+    if not app.secret_key:
+        raise RuntimeError("Falta configurar HIPS_WEB_SECRET_KEY")
+
+    if not app.config["HIPS_WEB_PASSWORD"]:
+        raise RuntimeError("Falta configurar HIPS_WEB_PASSWORD")
 
     app.config["HIPS_WEB_USER"] = os.environ.get("HIPS_WEB_USER", "admin")
-    app.config["HIPS_WEB_PASSWORD"] = os.environ.get("HIPS_WEB_PASSWORD", "admin")
+    app.config["HIPS_WEB_PASSWORD"] = os.environ.get("HIPS_WEB_PASSWORD")
     app.config["DASHBOARD_PROVIDER"] = dashboard_provider or consultar_dashboard
     app.config["RESOLVER_PROVIDER"] = resolver_provider or marcar_alarma_resuelta
     app.config["MODULO_PROVIDER"] = modulo_provider or actualizar_configuracion_modulo

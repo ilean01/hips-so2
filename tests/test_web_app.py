@@ -1,4 +1,8 @@
+import os
 import unittest
+
+os.environ.setdefault("HIPS_WEB_SECRET_KEY", "clave-test")
+os.environ.setdefault("HIPS_WEB_PASSWORD", "secreto")
 
 from web.app import crear_app
 
