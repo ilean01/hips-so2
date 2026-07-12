@@ -108,3 +108,101 @@ def analizar_conexiones_red(
             )
 
     return alertas
+
+# HIPS_DNS_QUERY_FLOOD_DETECTOR
+def detectar_dns_query_flood(contenido_log_dns: str, umbral_dns: int = 50):
+    """
+    Detecta posible DDoS a DNS a partir de logs tipo BIND/named.
+
+    Ejemplo de línea:
+    12-Jul-2026 14:10:00.001 client 203.0.113.55#53001 (example.com): query: example.com IN A +E
+    """
+    import re
+
+    contenido_log_dns = contenido_log_dns or ""
+    consultas_por_ip = {}
+
+    patron = re.compile(
+        r"client\s+(\d{1,3}(?:\.\d{1,3}){3})#\d+.*query:",
+        re.IGNORECASE
+    )
+
+    for linea in contenido_log_dns.splitlines():
+        match = patron.search(linea)
+        if not match:
+            continue
+
+        ip = match.group(1)
+        consultas_por_ip[ip] = consultas_por_ip.get(ip, 0) + 1
+
+    alertas = []
+
+    for ip, cantidad in consultas_por_ip.items():
+        if cantidad >= umbral_dns:
+            alertas.append({
+                "tipo": "dns_query_flood",
+                "severidad": "critica",
+                "ip": ip,
+                "ip_origen": ip,
+                "cantidad": cantidad,
+                "detalle": f"Se detectaron {cantidad} consultas DNS desde la IP {ip}",
+                "descripcion": f"Se detectaron {cantidad} consultas DNS desde la IP {ip}",
+            })
+
+    return alertas
+
+
+def analizar_log_dns_ddos(contenido_log_dns: str, umbral_dns: int = 50):
+    """
+    Alias legible para usar en documentación y pruebas.
+    """
+    return detectar_dns_query_flood(contenido_log_dns, umbral_dns=umbral_dns)
+
+# HIPS_DNS_QUERY_FLOOD_DETECTOR
+def detectar_dns_query_flood(contenido_log_dns: str, umbral_dns: int = 50):
+    """
+    Detecta posible DDoS a DNS a partir de logs tipo BIND/named.
+
+    Ejemplo de línea:
+    12-Jul-2026 14:10:00.001 client 203.0.113.55#53001 (example.com): query: example.com IN A +E
+    """
+    import re
+
+    contenido_log_dns = contenido_log_dns or ""
+    consultas_por_ip = {}
+
+    patron = re.compile(
+        r"client\s+(\d{1,3}(?:\.\d{1,3}){3})#\d+.*query:",
+        re.IGNORECASE
+    )
+
+    for linea in contenido_log_dns.splitlines():
+        match = patron.search(linea)
+        if not match:
+            continue
+
+        ip = match.group(1)
+        consultas_por_ip[ip] = consultas_por_ip.get(ip, 0) + 1
+
+    alertas = []
+
+    for ip, cantidad in consultas_por_ip.items():
+        if cantidad >= umbral_dns:
+            alertas.append({
+                "tipo": "dns_query_flood",
+                "severidad": "critica",
+                "ip": ip,
+                "ip_origen": ip,
+                "cantidad": cantidad,
+                "detalle": f"Se detectaron {cantidad} consultas DNS desde la IP {ip}",
+                "descripcion": f"Se detectaron {cantidad} consultas DNS desde la IP {ip}",
+            })
+
+    return alertas
+
+
+def analizar_log_dns_ddos(contenido_log_dns: str, umbral_dns: int = 50):
+    """
+    Alias legible para usar en documentación y pruebas.
+    """
+    return detectar_dns_query_flood(contenido_log_dns, umbral_dns=umbral_dns)

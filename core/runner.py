@@ -336,6 +336,7 @@ def ejecutar_ciclo_deteccion(entradas=None, registrar_alertas_logs=True):
 # HIPS_DNS_QUERY_DDOS_WRAPPER
 import re as _hips_re_dns_ddos
 import sys as _hips_sys_dns_ddos
+from detection.ddos_monitor import detectar_dns_query_flood as _hips_ddos_detectar_dns_query_flood
 from pathlib import Path as _hips_Path_dns_ddos
 
 _hips_ejecutar_ciclo_deteccion_original_dns_ddos = ejecutar_ciclo_deteccion
@@ -361,37 +362,8 @@ def _hips_leer_dns_query_logs_default():
 
 
 def _hips_detectar_dns_query_flood(contenido: str, umbral_dns: int = 50):
-    contenido = contenido or ""
-    consultas_por_ip = {}
-
-    patron = _hips_re_dns_ddos.compile(
-        r"client\s+(\d{1,3}(?:\.\d{1,3}){3})#\d+.*query:",
-        _hips_re_dns_ddos.IGNORECASE
-    )
-
-    for linea in contenido.splitlines():
-        m = patron.search(linea)
-        if not m:
-            continue
-
-        ip = m.group(1)
-        consultas_por_ip[ip] = consultas_por_ip.get(ip, 0) + 1
-
-    alertas = []
-
-    for ip, cantidad in consultas_por_ip.items():
-        if cantidad >= umbral_dns:
-            alertas.append({
-                "tipo": "dns_query_flood",
-                "severidad": "critica",
-                "ip": ip,
-                "ip_origen": ip,
-                "cantidad": cantidad,
-                "detalle": f"Se detectaron {cantidad} consultas DNS desde la IP {ip}",
-                "descripcion": f"Se detectaron {cantidad} consultas DNS desde la IP {ip}",
-            })
-
-    return alertas
+    # La lógica real está en detection/ddos_monitor.py para que el módulo DDoS sea claro y testeable.
+    return _hips_ddos_detectar_dns_query_flood(contenido, umbral_dns=umbral_dns)
 
 
 def ejecutar_ciclo_deteccion(entradas=None, *args, **kwargs):
