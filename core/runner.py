@@ -102,7 +102,7 @@ def leer_maillog_default():
 
 
 def cargar_baseline_archivos_default():
-    ruta = Path("config/baseline_archivos.json")
+    ruta = Path("db://baseline_archivos")
 
     if not ruta.exists():
         return None

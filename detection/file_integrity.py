@@ -106,3 +106,123 @@ def verificar_integridad(baseline: dict, registrar_alertas: bool = True) -> list
                 )
 
     return alertas
+
+
+# HIPS_BASELINE_DB_STORAGE
+# Permite guardar/cargar el baseline de integridad desde PostgreSQL usando db://baseline_archivos.
+import os as _hips_os_baseline_db
+import json as _hips_json_baseline_db
+
+_hips_guardar_baseline_archivo_original = guardar_baseline
+_hips_cargar_baseline_archivo_original = cargar_baseline
+
+
+def _hips_baseline_db_conn():
+    import psycopg2
+
+    return psycopg2.connect(
+        dbname=_hips_os_baseline_db.environ.get("HIPS_DB_NAME", "hips_db"),
+        user=_hips_os_baseline_db.environ.get("HIPS_DB_USER", "hips_app"),
+        password=_hips_os_baseline_db.environ.get("HIPS_DB_PASSWORD"),
+        host=_hips_os_baseline_db.environ.get("HIPS_DB_HOST", "127.0.0.1"),
+    )
+
+
+def _hips_asegurar_tabla_baseline_db(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS baseline_archivos (
+                ruta TEXT PRIMARY KEY,
+                sha256 TEXT,
+                metadata JSONB DEFAULT '{}'::jsonb,
+                actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        cur.execute("ALTER TABLE baseline_archivos ADD COLUMN IF NOT EXISTS ruta TEXT;")
+        cur.execute("ALTER TABLE baseline_archivos ADD COLUMN IF NOT EXISTS sha256 TEXT;")
+        cur.execute("ALTER TABLE baseline_archivos ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;")
+        cur.execute("ALTER TABLE baseline_archivos ADD COLUMN IF NOT EXISTS actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_baseline_archivos_ruta ON baseline_archivos(ruta);")
+    conn.commit()
+
+
+def _hips_es_destino_db_baseline(ruta):
+    return str(ruta).startswith("db://")
+
+
+def guardar_baseline(baseline, archivo="config/baseline_archivos.json"):
+    if not _hips_es_destino_db_baseline(archivo):
+        return _hips_guardar_baseline_archivo_original(baseline, archivo)
+
+    conn = _hips_baseline_db_conn()
+    try:
+        _hips_asegurar_tabla_baseline_db(conn)
+
+        with conn.cursor() as cur:
+            for ruta, metadata in (baseline or {}).items():
+                if not isinstance(metadata, dict):
+                    metadata = {"valor": metadata}
+
+                sha256 = (
+                    metadata.get("sha256")
+                    or metadata.get("hash")
+                    or metadata.get("hash_sha256")
+                    or ""
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO baseline_archivos (ruta, sha256, metadata, actualizado_en)
+                    VALUES (%s, %s, %s::jsonb, CURRENT_TIMESTAMP)
+                    ON CONFLICT (ruta)
+                    DO UPDATE SET
+                        sha256 = EXCLUDED.sha256,
+                        metadata = EXCLUDED.metadata,
+                        actualizado_en = CURRENT_TIMESTAMP;
+                    """,
+                    (ruta, sha256, _hips_json_baseline_db.dumps(metadata, ensure_ascii=False)),
+                )
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def cargar_baseline(archivo="config/baseline_archivos.json"):
+    if not _hips_es_destino_db_baseline(archivo):
+        return _hips_cargar_baseline_archivo_original(archivo)
+
+    try:
+        conn = _hips_baseline_db_conn()
+        try:
+            _hips_asegurar_tabla_baseline_db(conn)
+
+            with conn.cursor() as cur:
+                cur.execute("SELECT ruta, metadata FROM baseline_archivos ORDER BY ruta;")
+                filas = cur.fetchall()
+
+            if filas:
+                resultado = {}
+                for ruta, metadata in filas:
+                    if isinstance(metadata, str):
+                        metadata = _hips_json_baseline_db.loads(metadata)
+                    resultado[ruta] = metadata
+                return resultado
+
+        finally:
+            conn.close()
+
+    except Exception:
+        pass
+
+    # Fallback local solo para desarrollo/tests si la DB no está disponible.
+    try:
+        return _hips_cargar_baseline_archivo_original("config/baseline_archivos.json")
+    except Exception:
+        return {}
+
+
+def migrar_baseline_json_a_db(origen="config/baseline_archivos.json", destino="db://baseline_archivos"):
+    baseline = _hips_cargar_baseline_archivo_original(origen)
+    guardar_baseline(baseline, destino)
+    return len(baseline or {})
