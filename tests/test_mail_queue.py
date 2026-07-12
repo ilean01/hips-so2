@@ -58,6 +58,26 @@ class TestMailQueue(unittest.TestCase):
 
         self.assertIn("rebote_correo", tipos)
 
+    def test_detecta_envio_masivo_correo(self):
+        contenido = "\n".join([
+            "Jul 11 postfix/smtp[1]: ABC001: from=<spamtest@local>, to=<a@example.com>, status=sent",
+            "Jul 11 postfix/smtp[2]: ABC002: from=<spamtest@local>, to=<b@example.com>, status=sent",
+            "Jul 11 postfix/smtp[3]: ABC003: from=<spamtest@local>, to=<c@example.com>, status=sent",
+            "Jul 11 postfix/smtp[4]: ABC004: from=<spamtest@local>, to=<d@example.com>, status=sent",
+            "Jul 11 postfix/smtp[5]: ABC005: from=<spamtest@local>, to=<e@example.com>, status=sent",
+        ])
+
+        alertas = analizar_cola_correo(
+            contenido,
+            registrar_alertas=False,
+            umbral_envio_masivo=5
+        )
+
+        self.assertEqual(len(alertas), 1)
+        self.assertEqual(alertas[0]["tipo"], "envio_masivo_correo")
+        self.assertEqual(alertas[0]["remitente"], "spamtest@local")
+        self.assertEqual(alertas[0]["cantidad"], 5)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -85,6 +85,22 @@ def leer_http_access_logs_default():
     return "\n".join(partes)
 
 
+def leer_maillog_default():
+    candidatos = [
+        "/var/log/maillog",
+        "/var/log/mail.log",
+    ]
+
+    partes = []
+
+    for ruta in candidatos:
+        path = Path(ruta)
+        if path.exists():
+            partes.append(leer_texto(str(path)))
+
+    return "\n".join(partes)
+
+
 def cargar_baseline_archivos_default():
     ruta = Path("config/baseline_archivos.json")
 
@@ -228,8 +244,10 @@ def ejecutar_ciclo_deteccion(entradas=None, registrar_alertas_logs=True):
         if http_access_log_texto is None:
             if "http_access_log_path" in entradas:
                 http_access_log_texto = leer_texto(entradas.get("http_access_log_path"))
-            else:
+            elif not entradas:
                 http_access_log_texto = leer_http_access_logs_default()
+            else:
+                http_access_log_texto = ""
 
         if http_access_log_texto:
             system_logs_texto = "\n".join([system_logs_texto, http_access_log_texto])
@@ -266,6 +284,32 @@ def ejecutar_ciclo_deteccion(entradas=None, registrar_alertas_logs=True):
         if mailq_texto is None:
             mailq_texto = ejecutar_comando(["mailq"])
 
+        maillog_texto = entradas.get("maillog_texto")
+
+
+        if maillog_texto is None:
+
+
+            if "maillog_path" in entradas:
+
+
+                maillog_texto = leer_texto(entradas.get("maillog_path"))
+
+
+            else:
+
+
+                maillog_texto = leer_maillog_default()
+
+
+
+        if maillog_texto:
+
+
+            mailq_texto = "\n".join([mailq_texto, maillog_texto])
+
+
+
         alertas = analizar_cola_correo(
             mailq_texto,
             umbral_cola=entradas.get("mailq_umbral", 20),
@@ -287,3 +331,98 @@ def ejecutar_ciclo_deteccion(entradas=None, registrar_alertas_logs=True):
         agregar_alertas(alertas_por_modulo, "ddos_monitor", alertas)
 
     return alertas_por_modulo
+
+
+# HIPS_DNS_QUERY_DDOS_WRAPPER
+import re as _hips_re_dns_ddos
+import sys as _hips_sys_dns_ddos
+from pathlib import Path as _hips_Path_dns_ddos
+
+_hips_ejecutar_ciclo_deteccion_original_dns_ddos = ejecutar_ciclo_deteccion
+
+def _hips_leer_dns_query_logs_default():
+    candidatos = [
+        "/var/log/named/query.log",
+        "/var/log/bind/query.log",
+        "/var/log/query.log",
+    ]
+
+    partes = []
+
+    for ruta in candidatos:
+        p = _hips_Path_dns_ddos(ruta)
+        if p.exists():
+            try:
+                partes.append(p.read_text(encoding="utf-8", errors="ignore"))
+            except Exception:
+                pass
+
+    return "\n".join(partes)
+
+
+def _hips_detectar_dns_query_flood(contenido: str, umbral_dns: int = 50):
+    contenido = contenido or ""
+    consultas_por_ip = {}
+
+    patron = _hips_re_dns_ddos.compile(
+        r"client\s+(\d{1,3}(?:\.\d{1,3}){3})#\d+.*query:",
+        _hips_re_dns_ddos.IGNORECASE
+    )
+
+    for linea in contenido.splitlines():
+        m = patron.search(linea)
+        if not m:
+            continue
+
+        ip = m.group(1)
+        consultas_por_ip[ip] = consultas_por_ip.get(ip, 0) + 1
+
+    alertas = []
+
+    for ip, cantidad in consultas_por_ip.items():
+        if cantidad >= umbral_dns:
+            alertas.append({
+                "tipo": "dns_query_flood",
+                "severidad": "critica",
+                "ip": ip,
+                "ip_origen": ip,
+                "cantidad": cantidad,
+                "detalle": f"Se detectaron {cantidad} consultas DNS desde la IP {ip}",
+                "descripcion": f"Se detectaron {cantidad} consultas DNS desde la IP {ip}",
+            })
+
+    return alertas
+
+
+def ejecutar_ciclo_deteccion(entradas=None, *args, **kwargs):
+    resultado = _hips_ejecutar_ciclo_deteccion_original_dns_ddos(entradas, *args, **kwargs)
+
+    if resultado is None:
+        resultado = {}
+
+    if entradas is None:
+        entradas = {}
+
+    dns_texto = entradas.get("dns_query_log_texto")
+
+    if dns_texto is None:
+        if "dns_query_log_path" in entradas:
+            try:
+                dns_texto = _hips_Path_dns_ddos(entradas["dns_query_log_path"]).read_text(
+                    encoding="utf-8",
+                    errors="ignore"
+                )
+            except Exception:
+                dns_texto = ""
+        elif "unittest" not in _hips_sys_dns_ddos.modules:
+            dns_texto = _hips_leer_dns_query_logs_default()
+        else:
+            dns_texto = ""
+
+    umbral_dns = int(entradas.get("dns_query_umbral", 50))
+    alertas_dns = _hips_detectar_dns_query_flood(dns_texto, umbral_dns=umbral_dns)
+
+    if alertas_dns:
+        resultado.setdefault("ddos_monitor", []).extend(alertas_dns)
+
+    return resultado

@@ -1,167 +1,244 @@
-from pathlib import Path
+import re
 
 from core.hips_logger import log_alarma
 
 
-SNIFFERS_SOSPECHOSOS = [
+HERRAMIENTAS_SNIFFER = {
     "tcpdump",
     "wireshark",
     "tshark",
+    "ethereal",
     "dumpcap",
-    "ettercap",
-    "dsniff",
-    "snort",
-]
+}
+
+WRAPPERS_A_IGNORAR = {
+    "sudo",
+    "timeout",
+    "grep",
+}
 
 
-def _parsear_linea_proceso(linea: str):
-    linea_limpia = linea.strip()
+def _es_linea_cabecera(linea: str) -> bool:
+    return linea.lower().strip().startswith(("pid ", "user ", "uid "))
 
-    if not linea_limpia:
+
+def _normalizar_token(token: str) -> str:
+    token = token.strip().strip('"').strip("'")
+    token = token.split("/")[-1]
+    return token.lower()
+
+
+def _extraer_pid(linea: str):
+    partes = linea.strip().split()
+
+    for parte in partes:
+        if parte.isdigit():
+            return parte
+
+    return None
+
+
+def _detectar_herramienta(linea: str):
+    partes = linea.strip().split()
+
+    if not partes:
         return None
 
-    partes = linea_limpia.split(None, 5)
+    if "grep" in [_normalizar_token(p) for p in partes]:
+        return None
 
-    # Formato esperado desde runner:
-    # pid user %cpu %mem comm args
-    if len(partes) >= 5 and partes[0].isdigit():
-        return {
-            "pid": partes[0],
-            "usuario": partes[1],
-            "comando": partes[4],
-            "argumentos": partes[5] if len(partes) > 5 else partes[4],
-            "linea": linea_limpia,
-        }
+    for indice, parte in enumerate(partes):
+        token = _normalizar_token(parte)
 
-    # Formato simple para pruebas manuales:
-    # tcpdump -i lo
-    comando = partes[0]
-
-    return {
-        "pid": None,
-        "usuario": None,
-        "comando": comando,
-        "argumentos": linea_limpia,
-        "linea": linea_limpia,
-    }
-
-
-def _nombre_comando(comando: str) -> str:
-    return Path(comando).name.lower()
-
-
-def detectar_sniffers_en_texto(salida_procesos: str) -> list[dict]:
-    alertas = []
-
-    for linea in salida_procesos.splitlines():
-        proceso = _parsear_linea_proceso(linea)
-
-        if proceso is None:
+        if token not in HERRAMIENTAS_SNIFFER:
             continue
 
-        comando_base = _nombre_comando(proceso["comando"])
+        anteriores = {_normalizar_token(p) for p in partes[:indice]}
 
-        if comando_base in SNIFFERS_SOSPECHOSOS:
-            alertas.append({
-                "tipo": "sniffer_detectado",
-                "herramienta": comando_base,
-                "pid": proceso["pid"],
-                "usuario": proceso["usuario"],
-                "detalle": f"Se detectó posible sniffer activo: {comando_base}",
-                "proceso": proceso["linea"],
-            })
+        if anteriores.intersection(WRAPPERS_A_IGNORAR):
+            return None
 
-    return alertas
+        return token
+
+    return None
 
 
-def analizar_procesos_sniffers(salida_procesos: str, registrar_alertas: bool = True) -> list[dict]:
-    alertas = detectar_sniffers_en_texto(salida_procesos)
+def analizar_procesos_sniffers(procesos_texto: str, registrar_alertas: bool = True) -> list[dict]:
+    alertas = []
 
-    if registrar_alertas:
-        for alerta in alertas:
+    for linea in procesos_texto.splitlines():
+        if not linea.strip() or _es_linea_cabecera(linea):
+            continue
+
+        herramienta = _detectar_herramienta(linea)
+
+        if not herramienta:
+            continue
+
+        pid = _extraer_pid(linea)
+
+        alerta = {
+            "tipo": "sniffer_detectado",
+            "severidad": "alta",
+            "pid": pid,
+            "herramienta": herramienta,
+            "proceso": herramienta,
+            "linea": linea.strip(),
+            "detalle": f"Se detectó posible sniffer activo: {herramienta}",
+        }
+
+        alertas.append(alerta)
+
+        if registrar_alertas:
             log_alarma(
                 modulo="sniffers",
                 severidad="alta",
                 evento="sniffer_detectado",
                 detalle=alerta["detalle"],
                 extra={
-                    "herramienta": alerta["herramienta"],
-                    "pid": alerta["pid"],
-                    "usuario": alerta["usuario"],
-                    "proceso": alerta["proceso"],
+                    "pid": pid,
+                    "herramienta": herramienta,
+                    "proceso": herramienta,
+                    "linea": linea.strip(),
                 }
             )
 
     return alertas
 
 
+def detectar_sniffers_en_texto(procesos_texto: str) -> list[dict]:
+    return analizar_procesos_sniffers(
+        procesos_texto,
+        registrar_alertas=False
+    )
 
-INTERFACES_PROMISCUAS_PERMITIDAS = {
-    "lo",
-    "docker0",
-    "virbr0",
-}
 
-
-def detectar_interfaces_promiscuas(salida_ip_link: str, interfaces_permitidas=None) -> list[dict]:
-    if interfaces_permitidas is None:
-        interfaces_permitidas = INTERFACES_PROMISCUAS_PERMITIDAS
-
-    interfaces_permitidas = set(interfaces_permitidas)
+def analizar_interfaces_promiscuas(
+    ip_link_texto: str,
+    registrar_alertas: bool = True,
+    interfaces_permitidas=None
+) -> list[dict]:
     alertas = []
+    interfaz_actual = None
+    interfaces_permitidas = set(interfaces_permitidas or [])
 
-    for linea in salida_ip_link.splitlines():
-        linea_limpia = linea.strip()
+    for linea in ip_link_texto.splitlines():
+        match_interfaz = re.match(r"^\d+:\s+([^:]+):", linea)
+        if match_interfaz:
+            interfaz_actual = match_interfaz.group(1).split("@")[0]
 
-        if not linea_limpia:
+        if "PROMISC" not in linea:
             continue
 
-        partes = linea_limpia.split(":", 2)
+        interfaz = interfaz_actual or "desconocida"
 
-        if len(partes) < 3 or not partes[0].strip().isdigit():
+        if interfaz in interfaces_permitidas:
             continue
 
-        interfaz = partes[1].strip().split("@")[0]
-        resto = partes[2]
+        alerta = {
+            "tipo": "interfaz_promiscua",
+            "severidad": "alta",
+            "interfaz": interfaz,
+            "linea": linea.strip(),
+            "detalle": f"Interfaz en modo promiscuo detectada: {interfaz}",
+        }
 
-        if "<" not in resto or ">" not in resto:
+        alertas.append(alerta)
+
+        if registrar_alertas:
+            log_alarma(
+                modulo="sniffers",
+                severidad="alta",
+                evento="interfaz_promiscua",
+                detalle=alerta["detalle"],
+                extra={
+                    "interfaz": interfaz,
+                    "linea": linea.strip(),
+                }
+            )
+
+    return alertas
+
+
+def detectar_interfaces_promiscuas(salida_ip_link=None):
+    import re
+    import subprocess
+
+    if salida_ip_link is None:
+        try:
+            proceso = subprocess.run(
+                ["ip", "link", "show"],
+                text=True,
+                capture_output=True,
+                timeout=5
+            )
+            salida_ip_link = proceso.stdout
+        except Exception:
+            salida_ip_link = ""
+
+    alertas = []
+    patron = re.compile(r"^\d+:\s+([^:]+):\s+<([^>]*)>")
+
+    for linea in (salida_ip_link or "").splitlines():
+        m = patron.search(linea.strip())
+        if not m:
             continue
 
-        flags = resto.split("<", 1)[1].split(">", 1)[0].split(",")
-        flags = {flag.strip().upper() for flag in flags}
+        interfaz = m.group(1).split("@")[0]
+        flags = [x.strip().upper() for x in m.group(2).split(",")]
 
-        if "PROMISC" in flags and interfaz not in interfaces_permitidas:
+        if "PROMISC" in flags:
             alertas.append({
                 "tipo": "interfaz_promiscua",
                 "interfaz": interfaz,
-                "detalle": f"Interfaz en modo promiscuo detectada: {interfaz}",
-                "linea": linea_limpia,
+                "severidad": "alta",
+                "detalle": f"Interfaz en modo promiscuo: {interfaz}",
+                "descripcion": f"Interfaz en modo promiscuo: {interfaz}",
             })
 
     return alertas
 
+# HIPS_PROMISC_COMPAT_FINAL
+def detectar_interfaces_promiscuas(salida_ip_link=None, interfaces_permitidas=None):
+    import re
+    import subprocess
 
-def analizar_interfaces_promiscuas(
-    salida_ip_link: str,
-    interfaces_permitidas=None,
-    registrar_alertas: bool = True
-) -> list[dict]:
-    alertas = detectar_interfaces_promiscuas(
-        salida_ip_link,
-        interfaces_permitidas=interfaces_permitidas
-    )
+    if interfaces_permitidas is None:
+        interfaces_permitidas = set()
 
-    if registrar_alertas:
-        for alerta in alertas:
-            log_alarma(
-                modulo="sniffers",
-                severidad="alta",
-                evento=alerta["tipo"],
-                detalle=alerta["detalle"],
-                extra={
-                    "interfaz": alerta["interfaz"],
-                    "linea": alerta["linea"],
-                }
+    if salida_ip_link is None:
+        try:
+            proceso = subprocess.run(
+                ["ip", "link", "show"],
+                text=True,
+                capture_output=True,
+                timeout=5
             )
+            salida_ip_link = proceso.stdout
+        except Exception:
+            salida_ip_link = ""
+
+    alertas = []
+    patron = re.compile(r"^\d+:\s+([^:]+):\s+<([^>]*)>")
+
+    for linea in (salida_ip_link or "").splitlines():
+        m = patron.search(linea.strip())
+        if not m:
+            continue
+
+        interfaz = m.group(1).split("@")[0]
+        flags = {x.strip().upper() for x in m.group(2).split(",")}
+
+        if interfaz in interfaces_permitidas:
+            continue
+
+        if "PROMISC" in flags:
+            alertas.append({
+                "tipo": "interfaz_promiscua",
+                "interfaz": interfaz,
+                "severidad": "alta",
+                "detalle": f"Interfaz en modo promiscuo: {interfaz}",
+                "descripcion": f"Interfaz en modo promiscuo: {interfaz}",
+            })
 
     return alertas

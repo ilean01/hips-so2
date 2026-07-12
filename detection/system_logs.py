@@ -179,3 +179,59 @@ def analizar_logs_sistema(
                 )
 
     return alertas
+
+
+# HIPS_PASSWORD_COMPROMETIDA_WRAPPER
+import re as _hips_re_password
+from core.hips_logger import log_alarma as _hips_log_alarma_password
+
+_hips_analizar_logs_sistema_original_password = analizar_logs_sistema
+
+def _hips_detectar_password_comprometida(contenido: str, registrar_alertas: bool = True):
+    contenido = contenido or ""
+    alertas = []
+
+    patron = _hips_re_password.compile(
+        r"HIPS_PASSWORD_COMPROMETIDA\s+usuario=([a-zA-Z_][a-zA-Z0-9_-]{0,31})",
+        _hips_re_password.IGNORECASE
+    )
+
+    for linea in contenido.splitlines():
+        match = patron.search(linea)
+        if not match:
+            continue
+
+        usuario = match.group(1)
+        alerta = {
+            "tipo": "password_comprometida",
+            "severidad": "alta",
+            "usuario": usuario,
+            "detalle": f"Se detectó posible contraseña comprometida del usuario {usuario}",
+            "linea": linea.strip(),
+        }
+        alertas.append(alerta)
+
+        if registrar_alertas:
+            _hips_log_alarma_password(
+                modulo="system_logs",
+                severidad="alta",
+                evento="password_comprometida",
+                detalle=alerta["detalle"],
+                extra=alerta,
+            )
+
+    return alertas
+
+
+def analizar_logs_sistema(contenido, *args, **kwargs):
+    alertas = _hips_analizar_logs_sistema_original_password(contenido, *args, **kwargs)
+
+    registrar_alertas = kwargs.get("registrar_alertas", True)
+    alertas.extend(
+        _hips_detectar_password_comprometida(
+            contenido,
+            registrar_alertas=registrar_alertas
+        )
+    )
+
+    return alertas
