@@ -8,3 +8,5 @@ venv/
 
 *.log
 config/baseline_archivos.json
+.coverage
+.tmp_tests/
